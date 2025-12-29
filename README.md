@@ -1,87 +1,65 @@
-# Welcome to React Router!
+# Beacon Port
 
-A modern, production-ready template for building full-stack React applications using React Router.
+React Router v7 + TypeScript + Tailwind CSS + shadcn/ui 프로젝트
 
-[![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/github/remix-run/react-router-templates/tree/main/default)
+## 시작하기
 
-## Features
-
-- 🚀 Server-side rendering
-- ⚡️ Hot Module Replacement (HMR)
-- 📦 Asset bundling and optimization
-- 🔄 Data loading and mutations
-- 🔒 TypeScript by default
-- 🎉 TailwindCSS for styling
-- 📖 [React Router docs](https://reactrouter.com/)
-
-## Getting Started
-
-### Installation
-
-Install the dependencies:
-
-```bash
-npm install
-```
-
-### Development
-
-Start the development server with HMR:
+### 개발 서버 실행
 
 ```bash
 npm run dev
 ```
 
-Your application will be available at `http://localhost:5173`.
-
-## Building for Production
-
-Create a production build:
+### 빌드
 
 ```bash
 npm run build
 ```
 
-## Deployment
-
-### Docker Deployment
-
-To build and run using Docker:
+### 타입 체크
 
 ```bash
-docker build -t my-app .
-
-# Run the container
-docker run -p 3000:3000 my-app
+npm run typecheck
 ```
 
-The containerized application can be deployed to any platform that supports Docker, including:
+## 기술 스택
 
-- AWS ECS
-- Google Cloud Run
-- Azure Container Apps
-- Digital Ocean App Platform
-- Fly.io
-- Railway
+- **React Router v7**: 최신 버전의 React Router
+- **TypeScript**: 타입 안정성
+- **Tailwind CSS v4**: 유틸리티 우선 CSS 프레임워크
+- **shadcn/ui**: 재사용 가능한 컴포넌트 라이브러리
 
-### DIY Deployment
-
-If you're familiar with deploying Node applications, the built-in app server is production-ready.
-
-Make sure to deploy the output of `npm run build`
+## 프로젝트 구조
 
 ```
-├── package.json
-├── package-lock.json (or pnpm-lock.yaml, or bun.lockb)
-├── build/
-│   ├── client/    # Static assets
-│   └── server/    # Server-side code
+beacon-port/
+├── app/
+│   ├── components/     # React 컴포넌트
+│   │   └── ui/        # shadcn/ui 컴포넌트
+│   ├── lib/           # 유틸리티 함수
+│   ├── routes/        # 라우트 파일
+│   ├── app.css        # 전역 스타일
+│   └── root.tsx       # 루트 컴포넌트
+├── public/            # 정적 파일
+└── components.json    # shadcn/ui 설정
 ```
 
-## Styling
+## shadcn/ui 컴포넌트 추가
 
-This template comes with [Tailwind CSS](https://tailwindcss.com/) already configured for a simple default starting experience. You can use whatever CSS framework you prefer.
+새로운 shadcn/ui 컴포넌트를 추가하려면:
 
----
+```bash
+npx shadcn@latest add [component-name]
+```
 
-Built with ❤️ using React Router.
+예시:
+```bash
+npx shadcn@latest add button
+npx shadcn@latest add card
+```
+
+## 참고 자료
+
+- [React Router 문서](https://reactrouter.com/)
+- [Tailwind CSS 문서](https://tailwindcss.com/)
+- [shadcn/ui 문서](https://ui.shadcn.com/)
