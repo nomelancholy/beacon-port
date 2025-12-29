@@ -1,6 +1,6 @@
 import * as React from "react";
 import type { Route } from "./+types/my-resume";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { Plus } from "lucide-react";
 import { Button } from "../components/ui/button";
 import {
@@ -38,9 +38,10 @@ const mockResumes = [
 ];
 
 export default function MyResume() {
+  const navigate = useNavigate();
+
   const handleAddResume = () => {
-    // TODO: 이력서 추가 로직 구현
-    console.log("Add resume");
+    navigate("/add-resume");
   };
 
   const handleResumeClick = (id: number) => {
@@ -55,7 +56,10 @@ export default function MyResume() {
         <div className="container mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
             <h1 className="text-3xl font-bold text-white">나의 이력서</h1>
-            <Button onClick={handleAddResume} className="gap-2 text-white">
+            <Button
+              onClick={handleAddResume}
+              className="gap-2 text-white cursor-pointer hover:opacity-90 transition-opacity"
+            >
               <Plus className="h-4 w-4" />
               이력서 추가
             </Button>
@@ -70,7 +74,10 @@ export default function MyResume() {
             <p className="mb-4 text-lg text-white/90">
               등록된 이력서가 없습니다
             </p>
-            <Button onClick={handleAddResume} className="gap-2 text-white">
+            <Button
+              onClick={handleAddResume}
+              className="gap-2 text-white cursor-pointer hover:opacity-90 transition-opacity"
+            >
               <Plus className="h-4 w-4" />첫 이력서 추가하기
             </Button>
           </div>
