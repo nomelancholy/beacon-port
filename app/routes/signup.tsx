@@ -25,10 +25,10 @@ export default function Signup() {
   const handleSignup = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const name = formData.get("name") as string;
+    const nickname = formData.get("nickname") as string;
     const email = formData.get("email") as string;
     // TODO: 회원가입 로직 구현
-    console.log("Signup:", { name, email });
+    console.log("Signup:", { nickname, email });
   };
 
   const handleGoogleSignup = () => {
@@ -57,19 +57,24 @@ export default function Signup() {
           <form onSubmit={handleSignup} className="space-y-4">
             <div className="space-y-2">
               <label
-                htmlFor="name"
+                htmlFor="nickname"
                 className="text-sm font-medium text-gray-900 dark:text-white"
               >
-                이름
+                영어 닉네임
               </label>
               <Input
-                id="name"
-                name="name"
+                id="nickname"
+                name="nickname"
                 type="text"
-                placeholder="홍길동"
+                placeholder="johndoe"
+                pattern="[a-zA-Z0-9_]+"
+                title="영문자, 숫자, 언더스코어(_)만 사용 가능합니다"
                 required
                 className="bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               />
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                영문자, 숫자, 언더스코어(_)만 사용 가능합니다
+              </p>
             </div>
             <div className="space-y-2">
               <label
