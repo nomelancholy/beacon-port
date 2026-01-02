@@ -52,10 +52,12 @@ export function meta({}: Route.MetaArgs) {
 // 카테고리와 하위 항목 정의
 const resumeCategories = {
   "About Me": [
+    "사진",
     "이름",
     "Role",
     "이메일",
     "전화번호",
+    "영어 구사 능력",
     "웹사이트",
     "LinkedIn",
     "Instagram",
@@ -67,7 +69,8 @@ const resumeCategories = {
   Experience: [],
   "Side Project": [],
   Education: [],
-  Skill: [],
+  자격증: [],
+  어학성적: [],
   etc: [],
 };
 
@@ -99,7 +102,8 @@ export default function AddResume() {
     Experience: [],
     "Side Project": [],
     Education: [],
-    Skill: [],
+    자격증: [],
+    어학성적: [],
     etc: [],
   });
 
@@ -166,6 +170,29 @@ export default function AddResume() {
     }));
   };
 
+  // 파일 업로드 핸들러
+  const handleFileChange = (field: string, file: File | null) => {
+    if (!file) {
+      setFormData((prev) => {
+        const newData = { ...prev };
+        delete newData[field];
+        return newData;
+      });
+      return;
+    }
+
+    // 파일을 base64로 변환하여 저장
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = reader.result as string;
+      setFormData((prev) => ({
+        ...prev,
+        [field]: base64String,
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
   const renderFormField = (field: string) => {
     if (!selectedFields[field]) return null;
 
@@ -173,14 +200,16 @@ export default function AddResume() {
     const isDynamicExperience = field.startsWith("Experience_");
     const isDynamicSideProject = field.startsWith("Side Project_");
     const isDynamicEducation = field.startsWith("Education_");
-    const isDynamicSkill = field.startsWith("Skill_");
+    const isDynamicCertification = field.startsWith("자격증_");
+    const isDynamicLanguageTest = field.startsWith("어학성적_");
     const isDynamicEtc = field.startsWith("etc_");
 
     // 상위 카테고리 체크 여부 확인 - 상위가 체크 해제되면 하위 항목도 숨김
     if (isDynamicExperience && !selectedFields["Experience"]) return null;
     if (isDynamicSideProject && !selectedFields["Side Project"]) return null;
     if (isDynamicEducation && !selectedFields["Education"]) return null;
-    if (isDynamicSkill && !selectedFields["Skill"]) return null;
+    if (isDynamicCertification && !selectedFields["자격증"]) return null;
+    if (isDynamicLanguageTest && !selectedFields["어학성적"]) return null;
     if (isDynamicEtc && !selectedFields["etc"]) return null;
 
     // Experience 경력 필드인지 확인 (구버전 호환)
@@ -631,6 +660,154 @@ export default function AddResume() {
       );
     }
 
+    if (isDynamicLanguageTest) {
+      const displayName = `어학 성적 ${dynamicItems["어학성적"].indexOf(field) + 1}`;
+      return (
+        <div key={field} className="mb-8 p-6 border rounded-lg bg-card">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">{displayName}</h3>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => handleRemoveDynamicItem("어학성적", field)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <label
+                htmlFor={`${field}_시험명`}
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                시험명
+              </label>
+              <Input
+                id={`${field}_시험명`}
+                name={`${field}_시험명`}
+                value={formData[`${field}_시험명`] || ""}
+                onChange={(e) =>
+                  handleInputChange(`${field}_시험명`, e.target.value)
+                }
+                placeholder="예: TOEIC, TOEFL, IELTS"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor={`${field}_점수`}
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                점수
+              </label>
+              <Input
+                id={`${field}_점수`}
+                name={`${field}_점수`}
+                value={formData[`${field}_점수`] || ""}
+                onChange={(e) =>
+                  handleInputChange(`${field}_점수`, e.target.value)
+                }
+                placeholder="예: 950, 7.5"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor={`${field}_응시일자`}
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                응시 일자
+              </label>
+              <Input
+                id={`${field}_응시일자`}
+                name={`${field}_응시일자`}
+                type="month"
+                value={formData[`${field}_응시일자`] || ""}
+                onChange={(e) =>
+                  handleInputChange(`${field}_응시일자`, e.target.value)
+                }
+                placeholder="예: 2024-01"
+              />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (isDynamicCertification) {
+      const displayName = `자격증 ${dynamicItems["자격증"].indexOf(field) + 1}`;
+      return (
+        <div key={field} className="mb-8 p-6 border rounded-lg bg-card">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">{displayName}</h3>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => handleRemoveDynamicItem("자격증", field)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <label
+                htmlFor={`${field}_자격증명`}
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                자격증명
+              </label>
+              <Input
+                id={`${field}_자격증명`}
+                name={`${field}_자격증명`}
+                value={formData[`${field}_자격증명`] || ""}
+                onChange={(e) =>
+                  handleInputChange(`${field}_자격증명`, e.target.value)
+                }
+                placeholder="자격증명을 입력하세요"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor={`${field}_발급기관`}
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                발급기관
+              </label>
+              <Input
+                id={`${field}_발급기관`}
+                name={`${field}_발급기관`}
+                value={formData[`${field}_발급기관`] || ""}
+                onChange={(e) =>
+                  handleInputChange(`${field}_발급기관`, e.target.value)
+                }
+                placeholder="발급기관을 입력하세요"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor={`${field}_취득일`}
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                취득일
+              </label>
+              <Input
+                id={`${field}_취득일`}
+                name={`${field}_취득일`}
+                type="month"
+                value={formData[`${field}_취득일`] || ""}
+                onChange={(e) =>
+                  handleInputChange(`${field}_취득일`, e.target.value)
+                }
+                placeholder="예: 2024-01"
+              />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div key={field} className="mb-6">
         <label
@@ -639,7 +816,43 @@ export default function AddResume() {
         >
           {field}
         </label>
-        {field === "Introduce" ? (
+        {field === "사진" ? (
+          <div className="space-y-4">
+            <input
+              id={field}
+              name={field}
+              type="file"
+              accept="image/*"
+              onChange={(e) =>
+                handleFileChange(field, e.target.files?.[0] || null)
+              }
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            />
+            {formData[field] && (
+              <div className="mt-4">
+                <img
+                  src={formData[field]}
+                  alt="프로필 사진 미리보기"
+                  className="w-32 h-32 rounded-full object-cover border-2 border-gray-300 dark:border-gray-600"
+                />
+              </div>
+            )}
+          </div>
+        ) : field === "영어 구사 능력" ? (
+          <select
+            id={field}
+            name={field}
+            value={formData[field] || ""}
+            onChange={(e) => handleInputChange(field, e.target.value)}
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <option value="">수준을 선택하세요</option>
+            <option value="Native">Native - 모국어와 동일 수준</option>
+            <option value="Advanced">Advanced - 유창한 의사소통 가능</option>
+            <option value="Intermediate">Intermediate - 일상 대화 가능</option>
+            <option value="Basic">Basic - 기본 의사 소통</option>
+          </select>
+        ) : field === "Introduce" ? (
           <textarea
             id={field}
             name={field}
@@ -673,10 +886,12 @@ export default function AddResume() {
     // 필드별 placeholder 텍스트 정의
     const getPlaceholder = (field: string): string => {
       const placeholders: Record<string, string> = {
+        사진: "사진",
         이름: "이름",
         Role: "Role을 입력하세요",
         이메일: "이메일을 입력하세요",
         전화번호: "전화번호를 입력하세요",
+        "영어 구사 능력": "수준을 선택하세요",
         웹사이트: "웹사이트를 입력하세요",
         Introduce: "자기소개를 입력하세요",
         회사명: "회사명을 입력하세요",
@@ -692,6 +907,12 @@ export default function AddResume() {
         링크: "링크를 입력하세요",
         시작일: "시작일을 입력하세요",
         종료일: "종료일을 입력하세요",
+        자격증명: "자격증명을 입력하세요",
+        발급기관: "발급기관을 입력하세요",
+        취득일: "취득일을 입력하세요",
+        시험명: "시험명을 입력하세요",
+        점수: "점수를 입력하세요",
+        응시일자: "응시 일자를 입력하세요",
       };
       return placeholders[field] || `${field}을(를) 입력하세요`;
     };
@@ -767,9 +988,27 @@ export default function AddResume() {
 
     return (
       <div className="max-w-3xl mx-auto text-gray-900 dark:text-gray-100">
-        {/* 헤더: 이름/Role과 소셜 아이콘 */}
+        {/* 헤더: 사진, 이름/Role과 소셜 아이콘 */}
         <div className="flex items-start justify-between mb-8">
           <div className="flex-1">
+            {/* 사진 표시 */}
+            {selectedFields["사진"] && (
+              <div className="mb-6">
+                {formData["사진"] ? (
+                  <img
+                    src={formData["사진"]}
+                    alt="프로필 사진"
+                    className="w-32 h-32 rounded-full object-cover border-4 border-gray-300 dark:border-gray-600 shadow-lg"
+                  />
+                ) : (
+                  <div className="w-32 h-32 rounded-full border-4 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center bg-gray-100 dark:bg-gray-800">
+                    <span className="text-gray-400 dark:text-gray-500 text-sm italic">
+                      사진
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
             {selectedFields["이름"] && (
               <h1
                 className={`text-5xl font-bold mb-3 ${!formData["이름"] ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-900 dark:text-gray-100"}`}
@@ -844,6 +1083,57 @@ export default function AddResume() {
                     </div>
                   );
                 })}
+                {/* 영어 구사 능력 */}
+                {selectedFields["영어 구사 능력"] && (
+                  <div
+                    className={
+                      !formData["영어 구사 능력"]
+                        ? "text-gray-400 dark:text-gray-500 italic"
+                        : "text-gray-700 dark:text-gray-300"
+                    }
+                  >
+                    <span className="font-medium">English:</span>{" "}
+                    <span>
+                      {formData["영어 구사 능력"]
+                        ? formData["영어 구사 능력"] === "Native"
+                          ? "Native - 모국어와 동일 수준"
+                          : formData["영어 구사 능력"] === "Advanced"
+                            ? "Advanced - 유창한 의사소통 가능"
+                            : formData["영어 구사 능력"] === "Intermediate"
+                              ? "Intermediate - 일상 대화 가능"
+                              : formData["영어 구사 능력"] === "Basic"
+                                ? "Basic - 기본 의사 소통"
+                                : formData["영어 구사 능력"]
+                        : getPlaceholder("영어 구사 능력")}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+            {contactInfo.length === 0 && selectedFields["영어 구사 능력"] && (
+              <div className="space-y-1 text-sm text-right">
+                <div
+                  className={
+                    !formData["영어 구사 능력"]
+                      ? "text-gray-400 dark:text-gray-500 italic"
+                      : "text-gray-700 dark:text-gray-300"
+                  }
+                >
+                  <span className="font-medium">English:</span>{" "}
+                  <span>
+                    {formData["영어 구사 능력"]
+                      ? formData["영어 구사 능력"] === "Native"
+                        ? "Native - 모국어와 동일 수준"
+                        : formData["영어 구사 능력"] === "Advanced"
+                          ? "Advanced - 유창한 의사소통 가능"
+                          : formData["영어 구사 능력"] === "Intermediate"
+                            ? "Intermediate - 일상 대화 가능"
+                            : formData["영어 구사 능력"] === "Basic"
+                              ? "Basic - 기본 의사 소통"
+                              : formData["영어 구사 능력"]
+                      : getPlaceholder("영어 구사 능력")}
+                  </span>
+                </div>
               </div>
             )}
           </div>
@@ -885,15 +1175,40 @@ export default function AddResume() {
 
                 // 기간 포맷팅 함수
                 const formatPeriod = () => {
-                  if (!startDate && !endDate) return null;
                   const formatDate = (dateStr: string) => {
-                    if (!dateStr) return "";
+                    if (!dateStr) return null;
                     const [year, month] = dateStr.split("-");
                     return `${year}년 ${parseInt(month)}월`;
                   };
                   const start = formatDate(startDate);
-                  const end = endDate ? formatDate(endDate) : "현재";
-                  return start && end ? `${start} – ${end}` : start || end;
+                  const end = endDate ? formatDate(endDate) : null;
+
+                  // 둘 다 없으면 null 반환
+                  if (!start && !end) return null;
+
+                  // 둘 다 있으면 포맷팅된 기간 반환
+                  if (start && end) {
+                    return { start, end, display: `${start} – ${end}` };
+                  }
+
+                  // 하나만 있으면 해당 값과 placeholder 반환
+                  if (start) {
+                    return {
+                      start,
+                      end: getPlaceholder("종료일"),
+                      display: `${start} – ${getPlaceholder("종료일")}`,
+                    };
+                  }
+
+                  if (end) {
+                    return {
+                      start: getPlaceholder("시작일"),
+                      end,
+                      display: `${getPlaceholder("시작일")} – ${end}`,
+                    };
+                  }
+
+                  return null;
                 };
 
                 const period = formatPeriod();
@@ -921,13 +1236,14 @@ export default function AddResume() {
                       {(role || period) && <span className="mx-2">•</span>}
                       {period ? (
                         <span
-                          className={`${!period ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
+                          className={`${!startDate || !endDate ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
                         >
-                          {period}
+                          {period.display}
                         </span>
                       ) : (
                         <span className="text-gray-400 dark:text-gray-500 italic">
-                          {getPlaceholder("시작일")}
+                          {getPlaceholder("시작일")} –{" "}
+                          {getPlaceholder("종료일")}
                         </span>
                       )}
                     </div>
@@ -972,15 +1288,40 @@ export default function AddResume() {
 
                 // 기간 포맷팅 함수
                 const formatPeriod = () => {
-                  if (!startDate && !endDate) return null;
                   const formatDate = (dateStr: string) => {
-                    if (!dateStr) return "";
+                    if (!dateStr) return null;
                     const [year, month] = dateStr.split("-");
                     return `${year}년 ${parseInt(month)}월`;
                   };
                   const start = formatDate(startDate);
-                  const end = endDate ? formatDate(endDate) : "현재";
-                  return start && end ? `${start} – ${end}` : start || end;
+                  const end = endDate ? formatDate(endDate) : null;
+
+                  // 둘 다 없으면 null 반환
+                  if (!start && !end) return null;
+
+                  // 둘 다 있으면 포맷팅된 기간 반환
+                  if (start && end) {
+                    return { start, end, display: `${start} – ${end}` };
+                  }
+
+                  // 하나만 있으면 해당 값과 placeholder 반환
+                  if (start) {
+                    return {
+                      start,
+                      end: getPlaceholder("종료일"),
+                      display: `${start} – ${getPlaceholder("종료일")}`,
+                    };
+                  }
+
+                  if (end) {
+                    return {
+                      start: getPlaceholder("시작일"),
+                      end,
+                      display: `${getPlaceholder("시작일")} – ${end}`,
+                    };
+                  }
+
+                  return null;
                 };
 
                 const period = formatPeriod();
@@ -995,13 +1336,13 @@ export default function AddResume() {
                     </h3>
                     {period ? (
                       <div
-                        className={`mb-2 ${!period ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
+                        className={`mb-2 ${!startDate || !endDate ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
                       >
-                        {period}
+                        {period.display}
                       </div>
                     ) : (
                       <div className="mb-2 text-gray-400 dark:text-gray-500 italic">
-                        {getPlaceholder("시작일")}
+                        {getPlaceholder("시작일")} – {getPlaceholder("종료일")}
                       </div>
                     )}
                     <div
@@ -1045,15 +1386,40 @@ export default function AddResume() {
 
                 // 기간 포맷팅 함수
                 const formatPeriod = () => {
-                  if (!startDate && !endDate) return null;
                   const formatDate = (dateStr: string) => {
-                    if (!dateStr) return "";
+                    if (!dateStr) return null;
                     const [year, month] = dateStr.split("-");
                     return `${year}년 ${parseInt(month)}월`;
                   };
                   const start = formatDate(startDate);
-                  const end = endDate ? formatDate(endDate) : "현재";
-                  return start && end ? `${start} – ${end}` : start || end;
+                  const end = endDate ? formatDate(endDate) : null;
+
+                  // 둘 다 없으면 null 반환
+                  if (!start && !end) return null;
+
+                  // 둘 다 있으면 포맷팅된 기간 반환
+                  if (start && end) {
+                    return { start, end, display: `${start} – ${end}` };
+                  }
+
+                  // 하나만 있으면 해당 값과 placeholder 반환
+                  if (start) {
+                    return {
+                      start,
+                      end: getPlaceholder("종료일"),
+                      display: `${start} – ${getPlaceholder("종료일")}`,
+                    };
+                  }
+
+                  if (end) {
+                    return {
+                      start: getPlaceholder("시작일"),
+                      end,
+                      display: `${getPlaceholder("시작일")} – ${end}`,
+                    };
+                  }
+
+                  return null;
                 };
 
                 const period = formatPeriod();
@@ -1073,13 +1439,13 @@ export default function AddResume() {
                     </div>
                     {period ? (
                       <div
-                        className={`mb-2 ${!period ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
+                        className={`mb-2 ${!startDate || !endDate ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
                       >
-                        {period}
+                        {period.display}
                       </div>
                     ) : (
                       <div className="mb-2 text-gray-400 dark:text-gray-500 italic">
-                        {getPlaceholder("시작일")}
+                        {getPlaceholder("시작일")} – {getPlaceholder("종료일")}
                       </div>
                     )}
                     <div
@@ -1144,6 +1510,119 @@ export default function AddResume() {
           );
         })()}
 
+        {/* 자격증 섹션 */}
+        {(() => {
+          const certificationFields = dynamicItems["자격증"].filter(
+            (field) => selectedFields[field]
+          );
+
+          if (certificationFields.length === 0) return null;
+
+          return (
+            <section className="mb-10">
+              <hr className="border-gray-300 dark:border-gray-600 mb-4" />
+              <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
+                자격증
+              </h2>
+              {certificationFields.map((field) => {
+                const certificationName = formData[`${field}_자격증명`];
+                const issuer = formData[`${field}_발급기관`];
+                const acquisitionDate = formData[`${field}_취득일`];
+
+                // 취득일 포맷팅
+                const formatAcquisitionDate = () => {
+                  if (!acquisitionDate) return null;
+                  const [year, month] = acquisitionDate.split("-");
+                  return `${year}년 ${parseInt(month)}월`;
+                };
+
+                const acquisitionDateFormatted = formatAcquisitionDate();
+
+                return (
+                  <div key={field} className="mb-10">
+                    <hr className="border-gray-300 dark:border-gray-600 mb-6" />
+                    <h3
+                      className={`text-2xl font-bold mb-2 ${!certificationName ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-900 dark:text-gray-100"}`}
+                    >
+                      {getDisplayValue("자격증명", certificationName)}
+                    </h3>
+                    <div
+                      className={`mb-2 ${!issuer ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
+                    >
+                      {getDisplayValue("발급기관", issuer)}
+                    </div>
+                    <div
+                      className={`mb-2 ${!acquisitionDateFormatted ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
+                    >
+                      {acquisitionDateFormatted || getPlaceholder("취득일")}
+                    </div>
+                  </div>
+                );
+              })}
+            </section>
+          );
+        })()}
+
+        {/* 어학 성적 섹션 */}
+        {(() => {
+          const languageTestFields = dynamicItems["어학성적"].filter(
+            (field) => selectedFields[field]
+          );
+
+          if (languageTestFields.length === 0) return null;
+
+          return (
+            <section className="mb-10">
+              <hr className="border-gray-300 dark:border-gray-600 mb-4" />
+              <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
+                어학 성적
+              </h2>
+              {languageTestFields.map((field) => {
+                const testName = formData[`${field}_시험명`];
+                const score = formData[`${field}_점수`];
+                const testDate = formData[`${field}_응시일자`];
+
+                // 응시 일자 포맷팅
+                const formatTestDate = () => {
+                  if (!testDate) return null;
+                  const [year, month] = testDate.split("-");
+                  return `${year}년 ${parseInt(month)}월`;
+                };
+
+                const testDateFormatted = formatTestDate();
+
+                return (
+                  <div key={field} className="mb-10">
+                    <hr className="border-gray-300 dark:border-gray-600 mb-6" />
+                    <h3
+                      className={`text-2xl font-bold mb-2 ${!testName ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-900 dark:text-gray-100"}`}
+                    >
+                      {getDisplayValue("시험명", testName)}
+                    </h3>
+                    <div className="mb-2">
+                      <span
+                        className={`text-lg ${!score ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
+                      >
+                        {getDisplayValue("점수", score)}
+                      </span>
+                      {testDateFormatted && (
+                        <span className="text-gray-700 dark:text-gray-300 ml-4">
+                          ({testDateFormatted})
+                        </span>
+                      )}
+                      {!testDateFormatted && (
+                        <span className="text-gray-400 dark:text-gray-500 italic ml-4">
+                          ({getPlaceholder("응시일자")})
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </section>
+          );
+        })()}
+
         {/* 다른 섹션들도 여기에 추가 가능 */}
         {Object.entries(resumeCategories)
           .filter(
@@ -1152,6 +1631,8 @@ export default function AddResume() {
               category !== "Experience" &&
               category !== "Side Project" &&
               category !== "Education" &&
+              category !== "자격증" &&
+              category !== "어학성적" &&
               category !== "etc"
           )
           .map(([category]) => {
@@ -1197,7 +1678,8 @@ export default function AddResume() {
                 "Experience",
                 "Side Project",
                 "Education",
-                "Skill",
+                "자격증",
+                "어학성적",
                 "etc",
               ].includes(category);
               const displayItems = isDynamicCategory
@@ -1252,9 +1734,11 @@ export default function AddResume() {
                                           ? `프로젝트 ${index + 1}`
                                           : category === "Education"
                                             ? `교육 ${index + 1}`
-                                            : category === "Skill"
-                                              ? `스킬 ${index + 1}`
-                                              : `항목 ${index + 1}`}
+                                            : category === "자격증"
+                                              ? `자격증 ${index + 1}`
+                                              : category === "어학성적"
+                                                ? `어학 성적 ${index + 1}`
+                                                : `항목 ${index + 1}`}
                                     </label>
                                     <Button
                                       type="button"
