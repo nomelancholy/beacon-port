@@ -670,52 +670,118 @@ export default function AddResume() {
   };
 
   const renderPreview = () => {
-    // 아이콘으로 표시할 소셜 미디어 목록
-    const socialLinks = [
-      { key: "LinkedIn", icon: Linkedin, url: formData["LinkedIn"] },
-      { key: "Instagram", icon: Instagram, url: formData["Instagram"] },
-      { key: "Facebook", icon: Facebook, url: formData["Facebook"] },
-      { key: "Github", icon: Github, url: formData["Github"] },
-      { key: "Youtube", icon: Youtube, url: formData["Youtube"] },
-    ].filter((item) => item.url);
+    // 필드별 placeholder 텍스트 정의
+    const getPlaceholder = (field: string): string => {
+      const placeholders: Record<string, string> = {
+        이름: "이름",
+        Role: "Role을 입력하세요",
+        이메일: "이메일을 입력하세요",
+        전화번호: "전화번호를 입력하세요",
+        웹사이트: "웹사이트를 입력하세요",
+        Introduce: "자기소개를 입력하세요",
+        회사명: "회사명을 입력하세요",
+        프로젝트명: "프로젝트명을 입력하세요",
+        기관명: "기관명을 입력하세요",
+        활동명: "활동명을 입력하세요",
+        전공: "전공을 입력하세요",
+        기술스택: "기술 스택을 입력하세요",
+        스킬: "기술 스택을 입력하세요",
+        작업내용: "주요 작업 내용을 입력하세요",
+        주요작업: "주요 작업 내용을 입력하세요",
+        내용: "내용을 입력하세요",
+        링크: "링크를 입력하세요",
+        시작일: "시작일을 입력하세요",
+        종료일: "종료일을 입력하세요",
+      };
+      return placeholders[field] || `${field}을(를) 입력하세요`;
+    };
 
-    // 연락처 정보 (Email, Web, Phone)
+    // 값이 없으면 placeholder 반환, 있으면 값 반환
+    const getDisplayValue = (
+      field: string,
+      value: string | undefined
+    ): string => {
+      return value || getPlaceholder(field);
+    };
+
+    // 아이콘으로 표시할 소셜 미디어 목록 (선택된 것만)
+    const socialLinks = [
+      {
+        key: "LinkedIn",
+        icon: Linkedin,
+        url: formData["LinkedIn"],
+        selected: selectedFields["LinkedIn"],
+      },
+      {
+        key: "Instagram",
+        icon: Instagram,
+        url: formData["Instagram"],
+        selected: selectedFields["Instagram"],
+      },
+      {
+        key: "Facebook",
+        icon: Facebook,
+        url: formData["Facebook"],
+        selected: selectedFields["Facebook"],
+      },
+      {
+        key: "Github",
+        icon: Github,
+        url: formData["Github"],
+        selected: selectedFields["Github"],
+      },
+      {
+        key: "Youtube",
+        icon: Youtube,
+        url: formData["Youtube"],
+        selected: selectedFields["Youtube"],
+      },
+    ].filter((item) => item.selected);
+
+    // 연락처 정보 (Email, Web, Phone) - 선택된 것만
     const contactInfo = [
       {
         key: "이메일",
         label: "Email",
         value: formData["이메일"],
         isLink: true,
-        href: `mailto:${formData["이메일"]}`,
+        href: formData["이메일"] ? `mailto:${formData["이메일"]}` : "#",
+        selected: selectedFields["이메일"],
       },
       {
         key: "웹사이트",
         label: "Web",
         value: formData["웹사이트"],
         isLink: true,
-        href: formData["웹사이트"],
+        href: formData["웹사이트"] || "#",
+        selected: selectedFields["웹사이트"],
       },
       {
         key: "전화번호",
         label: "Phone",
         value: formData["전화번호"],
         isLink: false,
+        selected: selectedFields["전화번호"],
       },
-    ].filter((item) => item.value);
+    ].filter((item) => item.selected);
 
     return (
       <div className="max-w-3xl mx-auto text-gray-900 dark:text-gray-100">
         {/* 헤더: 이름/Role과 소셜 아이콘 */}
         <div className="flex items-start justify-between mb-8">
           <div className="flex-1">
-            {formData["이름"] && (
-              <h1 className="text-5xl font-bold mb-3 text-gray-900 dark:text-gray-100">
-                {formData["이름"]}
+            {selectedFields["이름"] && (
+              <h1
+                className={`text-5xl font-bold mb-3 ${!formData["이름"] ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-900 dark:text-gray-100"}`}
+              >
+                {getDisplayValue("이름", formData["이름"])}
               </h1>
             )}
-            {formData["Role"] && (
-              <h2 className="text-2xl font-normal text-gray-600 dark:text-gray-400">
-                {formData["Role"]}
+            {selectedFields["Role"] && (
+              <h2
+                className={`text-2xl font-normal ${!formData["Role"] ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-600 dark:text-gray-400"}`}
+              >
+                {getDisplayValue("Role", formData["Role"])}
               </h2>
             )}
           </div>
@@ -728,11 +794,16 @@ export default function AddResume() {
                 {socialLinks.map(({ key, icon: Icon, url }) => (
                   <a
                     key={key}
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-10 h-10 rounded-full bg-gray-800 dark:bg-gray-700 flex items-center justify-center text-white hover:bg-gray-700 dark:hover:bg-gray-600 transition-colors"
+                    href={url || "#"}
+                    target={url ? "_blank" : undefined}
+                    rel={url ? "noopener noreferrer" : undefined}
+                    className={`w-10 h-10 rounded-full flex items-center justify-center text-white transition-colors ${
+                      url
+                        ? "bg-gray-800 dark:bg-gray-700 hover:bg-gray-700 dark:hover:bg-gray-600"
+                        : "bg-gray-400 dark:bg-gray-500 cursor-not-allowed opacity-50"
+                    }`}
                     aria-label={key}
+                    onClick={(e) => !url && e.preventDefault()}
                   >
                     <Icon className="w-5 h-5" />
                   </a>
@@ -742,37 +813,50 @@ export default function AddResume() {
 
             {/* 연락처 정보 (Email, Web, Phone) */}
             {contactInfo.length > 0 && (
-              <div className="space-y-1 text-sm text-gray-700 dark:text-gray-300 text-right">
-                {contactInfo.map(({ key, label, value, isLink, href }) => (
-                  <div key={key}>
-                    <span className="font-medium">{label}:</span>{" "}
-                    {isLink ? (
-                      <a
-                        href={href}
-                        target={key === "이메일" ? undefined : "_blank"}
-                        rel={
-                          key === "이메일" ? undefined : "noopener noreferrer"
-                        }
-                        className="text-blue-600 dark:text-blue-400 hover:underline"
-                      >
-                        {value}
-                      </a>
-                    ) : (
-                      <span>{value}</span>
-                    )}
-                  </div>
-                ))}
+              <div className="space-y-1 text-sm text-right">
+                {contactInfo.map(({ key, label, value, isLink, href }) => {
+                  const displayValue = getDisplayValue(key, value);
+                  const isEmpty = !value;
+                  return (
+                    <div
+                      key={key}
+                      className={
+                        isEmpty
+                          ? "text-gray-400 dark:text-gray-500 italic"
+                          : "text-gray-700 dark:text-gray-300"
+                      }
+                    >
+                      <span className="font-medium">{label}:</span>{" "}
+                      {isLink && value ? (
+                        <a
+                          href={href}
+                          target={key === "이메일" ? undefined : "_blank"}
+                          rel={
+                            key === "이메일" ? undefined : "noopener noreferrer"
+                          }
+                          className="text-blue-600 dark:text-blue-400 hover:underline"
+                        >
+                          {displayValue}
+                        </a>
+                      ) : (
+                        <span>{displayValue}</span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
         </div>
 
         {/* About Me */}
-        {formData["Introduce"] && (
+        {selectedFields["Introduce"] && (
           <section className="mb-10">
             <hr className="border-gray-300 dark:border-gray-600 mb-6" />
-            <div className="text-base leading-relaxed whitespace-pre-line text-gray-700 dark:text-gray-300">
-              {formData["Introduce"]}
+            <div
+              className={`text-base leading-relaxed whitespace-pre-line ${!formData["Introduce"] ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
+            >
+              {getDisplayValue("Introduce", formData["Introduce"])}
             </div>
           </section>
         )}
@@ -782,19 +866,8 @@ export default function AddResume() {
           const experienceFields = dynamicItems["Experience"].filter(
             (field) => selectedFields[field]
           );
-          const hasExperienceData = experienceFields.some((field) => {
-            const company = formData[`${field}_회사명`];
-            const role = formData[`${field}_Role`];
-            const startDate = formData[`${field}_시작일`];
-            const endDate = formData[`${field}_종료일`];
-            const skills = formData[`${field}_스킬`];
-            const description = formData[`${field}_작업내용`];
-            return (
-              company || role || startDate || endDate || skills || description
-            );
-          });
 
-          if (!hasExperienceData) return null;
+          if (experienceFields.length === 0) return null;
 
           return (
             <section className="mb-10">
@@ -825,44 +898,50 @@ export default function AddResume() {
 
                 const period = formatPeriod();
 
-                if (!company && !role && !period && !skills && !description) {
-                  return null;
-                }
-
                 return (
                   <div key={field} className="mb-10">
                     <hr className="border-gray-300 dark:border-gray-600 mb-6" />
-                    {company && (
-                      <h3 className="text-2xl font-bold mb-2 text-gray-900 dark:text-gray-100">
-                        {company}
-                      </h3>
-                    )}
-                    {(role || period) && (
-                      <div className="mb-2">
-                        {role && (
-                          <span className="font-bold text-gray-900 dark:text-gray-100">
-                            {role}
-                          </span>
-                        )}
-                        {role && period && <span className="mx-2">•</span>}
-                        {period && (
-                          <span className="text-gray-700 dark:text-gray-300">
-                            {period}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                    {skills && (
-                      <div className="text-sm text-gray-600 mb-2 dark:text-gray-400 italic">
-                        <span className="font-medium">주 사용 기술:</span>{" "}
-                        {skills}
-                      </div>
-                    )}
-                    {description && (
-                      <div className="text-base leading-relaxed whitespace-pre-line text-gray-700 dark:text-gray-300 mb-4">
-                        {description}
-                      </div>
-                    )}
+                    <h3
+                      className={`text-2xl font-bold mb-2 ${!company ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-900 dark:text-gray-100"}`}
+                    >
+                      {getDisplayValue("회사명", company)}
+                    </h3>
+                    <div className="mb-2">
+                      {role ? (
+                        <span
+                          className={`font-bold ${!role ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-900 dark:text-gray-100"}`}
+                        >
+                          {getDisplayValue("Role", role)}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 dark:text-gray-500 italic font-bold">
+                          {getPlaceholder("Role")}
+                        </span>
+                      )}
+                      {(role || period) && <span className="mx-2">•</span>}
+                      {period ? (
+                        <span
+                          className={`${!period ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
+                        >
+                          {period}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 dark:text-gray-500 italic">
+                          {getPlaceholder("시작일")}
+                        </span>
+                      )}
+                    </div>
+                    <div
+                      className={`text-sm mb-2 italic ${!skills ? "text-gray-400 dark:text-gray-500" : "text-gray-600 dark:text-gray-400"}`}
+                    >
+                      <span className="font-medium">주 사용 기술:</span>{" "}
+                      {getDisplayValue("스킬", skills)}
+                    </div>
+                    <div
+                      className={`text-base leading-relaxed whitespace-pre-line mb-4 ${!description ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
+                    >
+                      {getDisplayValue("작업내용", description)}
+                    </div>
                   </div>
                 );
               })}
@@ -875,18 +954,8 @@ export default function AddResume() {
           const sideProjectFields = dynamicItems["Side Project"].filter(
             (field) => selectedFields[field]
           );
-          const hasSideProjectData = sideProjectFields.some((field) => {
-            const projectName = formData[`${field}_프로젝트명`];
-            const startDate = formData[`${field}_시작일`];
-            const endDate = formData[`${field}_종료일`];
-            const techStack = formData[`${field}_기술스택`];
-            const description = formData[`${field}_주요작업`];
-            return (
-              projectName || startDate || endDate || techStack || description
-            );
-          });
 
-          if (!hasSideProjectData) return null;
+          if (sideProjectFields.length === 0) return null;
 
           return (
             <section className="mb-10">
@@ -916,34 +985,36 @@ export default function AddResume() {
 
                 const period = formatPeriod();
 
-                if (!projectName && !period && !techStack && !description) {
-                  return null;
-                }
-
                 return (
                   <div key={field} className="mb-10">
                     <hr className="border-gray-300 dark:border-gray-600 mb-6" />
-                    {projectName && (
-                      <h3 className="text-2xl font-bold mb-2 text-gray-900 dark:text-gray-100">
-                        {projectName}
-                      </h3>
-                    )}
-                    {period && (
-                      <div className="mb-2 text-gray-700 dark:text-gray-300">
+                    <h3
+                      className={`text-2xl font-bold mb-2 ${!projectName ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-900 dark:text-gray-100"}`}
+                    >
+                      {getDisplayValue("프로젝트명", projectName)}
+                    </h3>
+                    {period ? (
+                      <div
+                        className={`mb-2 ${!period ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
+                      >
                         {period}
                       </div>
-                    )}
-                    {techStack && (
-                      <div className="text-sm text-gray-600 mb-2 dark:text-gray-400 italic">
-                        <span className="font-medium">기술 스택:</span>{" "}
-                        {techStack}
+                    ) : (
+                      <div className="mb-2 text-gray-400 dark:text-gray-500 italic">
+                        {getPlaceholder("시작일")}
                       </div>
                     )}
-                    {description && (
-                      <div className="text-base leading-relaxed whitespace-pre-line text-gray-700 dark:text-gray-300 mb-4">
-                        {description}
-                      </div>
-                    )}
+                    <div
+                      className={`text-sm mb-2 italic ${!techStack ? "text-gray-400 dark:text-gray-500" : "text-gray-600 dark:text-gray-400"}`}
+                    >
+                      <span className="font-medium">기술 스택:</span>{" "}
+                      {getDisplayValue("기술스택", techStack)}
+                    </div>
+                    <div
+                      className={`text-base leading-relaxed whitespace-pre-line mb-4 ${!description ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
+                    >
+                      {getDisplayValue("주요작업", description)}
+                    </div>
                   </div>
                 );
               })}
@@ -956,16 +1027,8 @@ export default function AddResume() {
           const educationFields = dynamicItems["Education"].filter(
             (field) => selectedFields[field]
           );
-          const hasEducationData = educationFields.some((field) => {
-            const institution = formData[`${field}_기관명`];
-            const major = formData[`${field}_전공`];
-            const startDate = formData[`${field}_시작일`];
-            const endDate = formData[`${field}_종료일`];
-            const description = formData[`${field}_내용`];
-            return institution || major || startDate || endDate || description;
-          });
 
-          if (!hasEducationData) return null;
+          if (educationFields.length === 0) return null;
 
           return (
             <section className="mb-10">
@@ -995,33 +1058,35 @@ export default function AddResume() {
 
                 const period = formatPeriod();
 
-                if (!institution && !major && !period && !description) {
-                  return null;
-                }
-
                 return (
                   <div key={field} className="mb-10">
                     <hr className="border-gray-300 dark:border-gray-600 mb-6" />
-                    {institution && (
-                      <h3 className="text-2xl font-bold mb-2 text-gray-900 dark:text-gray-100">
-                        {institution}
-                      </h3>
-                    )}
-                    {major && (
-                      <div className="mb-2 text-gray-700 dark:text-gray-300">
-                        {major}
-                      </div>
-                    )}
-                    {period && (
-                      <div className="mb-2 text-gray-700 dark:text-gray-300">
+                    <h3
+                      className={`text-2xl font-bold mb-2 ${!institution ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-900 dark:text-gray-100"}`}
+                    >
+                      {getDisplayValue("기관명", institution)}
+                    </h3>
+                    <div
+                      className={`mb-2 ${!major ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
+                    >
+                      {getDisplayValue("전공", major)}
+                    </div>
+                    {period ? (
+                      <div
+                        className={`mb-2 ${!period ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
+                      >
                         {period}
                       </div>
-                    )}
-                    {description && (
-                      <div className="text-base leading-relaxed whitespace-pre-line text-gray-700 dark:text-gray-300 mb-4">
-                        {description}
+                    ) : (
+                      <div className="mb-2 text-gray-400 dark:text-gray-500 italic">
+                        {getPlaceholder("시작일")}
                       </div>
                     )}
+                    <div
+                      className={`text-base leading-relaxed whitespace-pre-line mb-4 ${!description ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
+                    >
+                      {getDisplayValue("내용", description)}
+                    </div>
                   </div>
                 );
               })}
@@ -1034,14 +1099,8 @@ export default function AddResume() {
           const etcFields = dynamicItems["etc"].filter(
             (field) => selectedFields[field]
           );
-          const hasEtcData = etcFields.some((field) => {
-            const activityName = formData[`${field}_활동명`];
-            const link = formData[`${field}_링크`];
-            const content = formData[`${field}_내용`];
-            return activityName || link || content;
-          });
 
-          if (!hasEtcData) return null;
+          if (etcFields.length === 0) return null;
 
           return (
             <section className="mb-10">
@@ -1054,34 +1113,30 @@ export default function AddResume() {
                 const link = formData[`${field}_링크`];
                 const content = formData[`${field}_내용`];
 
-                if (!activityName && !link && !content) {
-                  return null;
-                }
-
                 return (
                   <div key={field} className="mb-10">
                     <hr className="border-gray-300 dark:border-gray-600 mb-6" />
-                    {activityName && (
-                      <h3 className="text-2xl font-bold mb-2 text-gray-900 dark:text-gray-100">
-                        {link ? (
-                          <a
-                            href={link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 dark:text-blue-400 hover:underline"
-                          >
-                            {activityName}
-                          </a>
-                        ) : (
-                          activityName
-                        )}
-                      </h3>
-                    )}
-                    {content && (
-                      <div className="text-base leading-relaxed whitespace-pre-line text-gray-700 dark:text-gray-300 mb-4">
-                        {content}
-                      </div>
-                    )}
+                    <h3
+                      className={`text-2xl font-bold mb-2 ${!activityName ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-900 dark:text-gray-100"}`}
+                    >
+                      {link && activityName ? (
+                        <a
+                          href={link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 dark:text-blue-400 hover:underline"
+                        >
+                          {getDisplayValue("활동명", activityName)}
+                        </a>
+                      ) : (
+                        getDisplayValue("활동명", activityName)
+                      )}
+                    </h3>
+                    <div
+                      className={`text-base leading-relaxed whitespace-pre-line mb-4 ${!content ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
+                    >
+                      {getDisplayValue("내용", content)}
+                    </div>
                   </div>
                 );
               })}
@@ -1102,21 +1157,28 @@ export default function AddResume() {
           .map(([category]) => {
             const categoryFields = resumeCategories[
               category as keyof typeof resumeCategories
-            ].filter((field) => selectedFields[field] && formData[field]);
+            ].filter((field) => selectedFields[field]);
 
             if (categoryFields.length === 0) return null;
 
             return (
               <section key={category} className="mb-10">
+                <hr className="border-gray-300 dark:border-gray-600 mb-4" />
                 <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-gray-100">
                   {category}
                 </h2>
-                <div className="space-y-2 text-base text-gray-700 dark:text-gray-300">
-                  {categoryFields.map((field) => (
-                    <div key={field} className="leading-relaxed">
-                      {formData[field]}
-                    </div>
-                  ))}
+                <div className="space-y-2 text-base">
+                  {categoryFields.map((field) => {
+                    const value = formData[field];
+                    return (
+                      <div
+                        key={field}
+                        className={`leading-relaxed ${!value ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
+                      >
+                        {getDisplayValue(field, value)}
+                      </div>
+                    );
+                  })}
                 </div>
               </section>
             );
