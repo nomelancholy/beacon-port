@@ -9,7 +9,24 @@ import {
   Facebook,
   Plus,
   X,
+  GripVertical,
 } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  useSortable,
+  SortableContext,
+  verticalListSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import {
   Sidebar,
   SidebarContent,
@@ -73,6 +90,987 @@ const resumeCategories = {
   어학성적: [],
   etc: [],
 };
+
+// Experience 카드 컴포넌트 (통합 컴포넌트 - 외부 선언)
+const ExperienceCard = React.memo(
+  ({
+    itemId,
+    index,
+    category,
+    formData,
+    onInputChange,
+    onRemove,
+  }: {
+    itemId: string;
+    index: number;
+    category: string;
+    formData: Record<string, string>;
+    onInputChange: (field: string, value: string) => void;
+    onRemove: () => void;
+  }) => {
+    const id = `${category}_${itemId}`;
+
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({
+      id,
+    });
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+    };
+
+    return (
+      <div ref={setNodeRef} style={style} className="mb-8">
+        <div className="p-6 border rounded-lg bg-card relative">
+          <div
+            {...attributes}
+            {...listeners}
+            className="absolute left-2 top-2 cursor-move text-gray-400 hover:text-gray-600 touch-none"
+          >
+            <GripVertical className="h-5 w-5" />
+          </div>
+
+          {/* 내부 콘텐츠 직접 렌더링 */}
+          <div className="flex items-center justify-between mb-4 pl-6">
+            <h3 className="text-lg font-semibold">경력 {index + 1}</h3>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={onRemove}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <label
+                htmlFor={`${itemId}_회사명`}
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                근무회사명
+              </label>
+              <Input
+                id={`${itemId}_회사명`}
+                name={`${itemId}_회사명`}
+                value={formData[`${itemId}_회사명`] || ""}
+                onChange={(e) =>
+                  onInputChange(`${itemId}_회사명`, e.target.value)
+                }
+                placeholder="회사명을 입력하세요"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor={`${itemId}_Role`}
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                Role
+              </label>
+              <Input
+                id={`${itemId}_Role`}
+                name={`${itemId}_Role`}
+                value={formData[`${itemId}_Role`] || ""}
+                onChange={(e) =>
+                  onInputChange(`${itemId}_Role`, e.target.value)
+                }
+                placeholder="예: Python Backend, Python Chapter Lead"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label
+                  htmlFor={`${itemId}_시작일`}
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                >
+                  시작일
+                </label>
+                <Input
+                  id={`${itemId}_시작일`}
+                  name={`${itemId}_시작일`}
+                  type="month"
+                  value={formData[`${itemId}_시작일`] || ""}
+                  onChange={(e) =>
+                    onInputChange(`${itemId}_시작일`, e.target.value)
+                  }
+                  placeholder="예: 2019-01"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor={`${itemId}_종료일`}
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                >
+                  종료일
+                </label>
+                <Input
+                  id={`${itemId}_종료일`}
+                  name={`${itemId}_종료일`}
+                  type="month"
+                  value={formData[`${itemId}_종료일`] || ""}
+                  onChange={(e) =>
+                    onInputChange(`${itemId}_종료일`, e.target.value)
+                  }
+                  placeholder="예: 2024-01 또는 현재"
+                />
+              </div>
+            </div>
+            <div>
+              <label
+                htmlFor={`${itemId}_스킬`}
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                기술 스택
+              </label>
+              <Input
+                id={`${itemId}_스킬`}
+                name={`${itemId}_스킬`}
+                value={formData[`${itemId}_스킬`] || ""}
+                onChange={(e) =>
+                  onInputChange(`${itemId}_스킬`, e.target.value)
+                }
+                placeholder="예: Python, Flask, AWS, Swift (쉼표로 구분)"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor={`${itemId}_작업내용`}
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                주요 작업 내용
+              </label>
+              <textarea
+                id={`${itemId}_작업내용`}
+                name={`${itemId}_작업내용`}
+                rows={6}
+                value={formData[`${itemId}_작업내용`] || ""}
+                onChange={(e) =>
+                  onInputChange(`${itemId}_작업내용`, e.target.value)
+                }
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder="주요 작업 내용을 입력하세요"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  },
+  (prev, next) => {
+    // 폼 데이터 중 이 카드와 관련된 값만 바뀌었을 때만 리렌더링하도록 최적화
+    const id = prev.itemId;
+    return (
+      prev.itemId === next.itemId &&
+      prev.index === next.index &&
+      prev.category === next.category &&
+      prev.formData[`${id}_회사명`] === next.formData[`${id}_회사명`] &&
+      prev.formData[`${id}_Role`] === next.formData[`${id}_Role`] &&
+      prev.formData[`${id}_시작일`] === next.formData[`${id}_시작일`] &&
+      prev.formData[`${id}_종료일`] === next.formData[`${id}_종료일`] &&
+      prev.formData[`${id}_스킬`] === next.formData[`${id}_스킬`] &&
+      prev.formData[`${id}_작업내용`] === next.formData[`${id}_작업내용`]
+    );
+  }
+);
+
+// Side Project 카드 컴포넌트
+const SideProjectCard = React.memo(
+  ({
+    itemId,
+    index,
+    category,
+    formData,
+    onInputChange,
+    onRemove,
+  }: {
+    itemId: string;
+    index: number;
+    category: string;
+    formData: Record<string, string>;
+    onInputChange: (field: string, value: string) => void;
+    onRemove: () => void;
+  }) => {
+    const id = `${category}_${itemId}`;
+
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({
+      id,
+    });
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+    };
+
+    return (
+      <div ref={setNodeRef} style={style} className="mb-8">
+        <div className="p-6 border rounded-lg bg-card relative">
+          <div
+            {...attributes}
+            {...listeners}
+            className="absolute left-2 top-2 cursor-move text-gray-400 hover:text-gray-600 touch-none"
+          >
+            <GripVertical className="h-5 w-5" />
+          </div>
+
+          <div className="flex items-center justify-between mb-4 pl-6">
+            <h3 className="text-lg font-semibold">프로젝트 {index + 1}</h3>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={onRemove}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <label
+                htmlFor={`${itemId}_프로젝트명`}
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                사이드 프로젝트 명
+              </label>
+              <Input
+                id={`${itemId}_프로젝트명`}
+                name={`${itemId}_프로젝트명`}
+                value={formData[`${itemId}_프로젝트명`] || ""}
+                onChange={(e) =>
+                  onInputChange(`${itemId}_프로젝트명`, e.target.value)
+                }
+                placeholder="프로젝트명을 입력하세요"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label
+                  htmlFor={`${itemId}_시작일`}
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                >
+                  시작일
+                </label>
+                <Input
+                  id={`${itemId}_시작일`}
+                  name={`${itemId}_시작일`}
+                  type="month"
+                  value={formData[`${itemId}_시작일`] || ""}
+                  onChange={(e) =>
+                    onInputChange(`${itemId}_시작일`, e.target.value)
+                  }
+                  placeholder="예: 2023-01"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor={`${itemId}_종료일`}
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                >
+                  종료일
+                </label>
+                <Input
+                  id={`${itemId}_종료일`}
+                  name={`${itemId}_종료일`}
+                  type="month"
+                  value={formData[`${itemId}_종료일`] || ""}
+                  onChange={(e) =>
+                    onInputChange(`${itemId}_종료일`, e.target.value)
+                  }
+                  placeholder="예: 2023-06 또는 현재"
+                />
+              </div>
+            </div>
+            <div>
+              <label
+                htmlFor={`${itemId}_기술스택`}
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                기술 스택
+              </label>
+              <Input
+                id={`${itemId}_기술스택`}
+                name={`${itemId}_기술스택`}
+                value={formData[`${itemId}_기술스택`] || ""}
+                onChange={(e) =>
+                  onInputChange(`${itemId}_기술스택`, e.target.value)
+                }
+                placeholder="예: React, TypeScript, Node.js (쉼표로 구분)"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor={`${itemId}_주요작업`}
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                주요 작업
+              </label>
+              <textarea
+                id={`${itemId}_주요작업`}
+                name={`${itemId}_주요작업`}
+                rows={6}
+                value={formData[`${itemId}_주요작업`] || ""}
+                onChange={(e) =>
+                  onInputChange(`${itemId}_주요작업`, e.target.value)
+                }
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder="주요 작업 내용을 입력하세요"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  },
+  (prev, next) => {
+    const id = prev.itemId;
+    return (
+      prev.itemId === next.itemId &&
+      prev.index === next.index &&
+      prev.category === next.category &&
+      prev.formData[`${id}_프로젝트명`] === next.formData[`${id}_프로젝트명`] &&
+      prev.formData[`${id}_시작일`] === next.formData[`${id}_시작일`] &&
+      prev.formData[`${id}_종료일`] === next.formData[`${id}_종료일`] &&
+      prev.formData[`${id}_기술스택`] === next.formData[`${id}_기술스택`] &&
+      prev.formData[`${id}_주요작업`] === next.formData[`${id}_주요작업`]
+    );
+  }
+);
+
+// Education 카드 컴포넌트
+const EducationCard = React.memo(
+  ({
+    itemId,
+    index,
+    category,
+    formData,
+    onInputChange,
+    onRemove,
+  }: {
+    itemId: string;
+    index: number;
+    category: string;
+    formData: Record<string, string>;
+    onInputChange: (field: string, value: string) => void;
+    onRemove: () => void;
+  }) => {
+    const id = `${category}_${itemId}`;
+
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({
+      id,
+    });
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+    };
+
+    return (
+      <div ref={setNodeRef} style={style} className="mb-8">
+        <div className="p-6 border rounded-lg bg-card relative">
+          <div
+            {...attributes}
+            {...listeners}
+            className="absolute left-2 top-2 cursor-move text-gray-400 hover:text-gray-600 touch-none"
+          >
+            <GripVertical className="h-5 w-5" />
+          </div>
+
+          <div className="flex items-center justify-between mb-4 pl-6">
+            <h3 className="text-lg font-semibold">교육 {index + 1}</h3>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={onRemove}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <label
+                htmlFor={`${itemId}_기관명`}
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                교육 기관명
+              </label>
+              <Input
+                id={`${itemId}_기관명`}
+                name={`${itemId}_기관명`}
+                value={formData[`${itemId}_기관명`] || ""}
+                onChange={(e) =>
+                  onInputChange(`${itemId}_기관명`, e.target.value)
+                }
+                placeholder="교육 기관명을 입력하세요"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor={`${itemId}_전공`}
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                전공
+              </label>
+              <Input
+                id={`${itemId}_전공`}
+                name={`${itemId}_전공`}
+                value={formData[`${itemId}_전공`] || ""}
+                onChange={(e) =>
+                  onInputChange(`${itemId}_전공`, e.target.value)
+                }
+                placeholder="전공을 입력하세요"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label
+                  htmlFor={`${itemId}_시작일`}
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                >
+                  시작일
+                </label>
+                <Input
+                  id={`${itemId}_시작일`}
+                  name={`${itemId}_시작일`}
+                  type="month"
+                  value={formData[`${itemId}_시작일`] || ""}
+                  onChange={(e) =>
+                    onInputChange(`${itemId}_시작일`, e.target.value)
+                  }
+                  placeholder="예: 2018-04"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor={`${itemId}_종료일`}
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                >
+                  종료일
+                </label>
+                <Input
+                  id={`${itemId}_종료일`}
+                  name={`${itemId}_종료일`}
+                  type="month"
+                  value={formData[`${itemId}_종료일`] || ""}
+                  onChange={(e) =>
+                    onInputChange(`${itemId}_종료일`, e.target.value)
+                  }
+                  placeholder="예: 2018-05"
+                />
+              </div>
+            </div>
+            <div>
+              <label
+                htmlFor={`${itemId}_내용`}
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                교육 내용
+              </label>
+              <textarea
+                id={`${itemId}_내용`}
+                name={`${itemId}_내용`}
+                rows={6}
+                value={formData[`${itemId}_내용`] || ""}
+                onChange={(e) =>
+                  onInputChange(`${itemId}_내용`, e.target.value)
+                }
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder="교육 내용을 입력하세요"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  },
+  (prev, next) => {
+    const id = prev.itemId;
+    return (
+      prev.itemId === next.itemId &&
+      prev.index === next.index &&
+      prev.category === next.category &&
+      prev.formData[`${id}_기관명`] === next.formData[`${id}_기관명`] &&
+      prev.formData[`${id}_전공`] === next.formData[`${id}_전공`] &&
+      prev.formData[`${id}_시작일`] === next.formData[`${id}_시작일`] &&
+      prev.formData[`${id}_종료일`] === next.formData[`${id}_종료일`] &&
+      prev.formData[`${id}_내용`] === next.formData[`${id}_내용`]
+    );
+  }
+);
+
+// 자격증 카드 컴포넌트
+const CertificationCard = React.memo(
+  ({
+    itemId,
+    index,
+    category,
+    formData,
+    onInputChange,
+    onRemove,
+  }: {
+    itemId: string;
+    index: number;
+    category: string;
+    formData: Record<string, string>;
+    onInputChange: (field: string, value: string) => void;
+    onRemove: () => void;
+  }) => {
+    const id = `${category}_${itemId}`;
+
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({
+      id,
+    });
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+    };
+
+    return (
+      <div ref={setNodeRef} style={style} className="mb-8">
+        <div className="p-6 border rounded-lg bg-card relative">
+          <div
+            {...attributes}
+            {...listeners}
+            className="absolute left-2 top-2 cursor-move text-gray-400 hover:text-gray-600 touch-none"
+          >
+            <GripVertical className="h-5 w-5" />
+          </div>
+
+          <div className="flex items-center justify-between mb-4 pl-6">
+            <h3 className="text-lg font-semibold">자격증 {index + 1}</h3>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={onRemove}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <label
+                htmlFor={`${itemId}_자격증명`}
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                자격증명
+              </label>
+              <Input
+                id={`${itemId}_자격증명`}
+                name={`${itemId}_자격증명`}
+                value={formData[`${itemId}_자격증명`] || ""}
+                onChange={(e) =>
+                  onInputChange(`${itemId}_자격증명`, e.target.value)
+                }
+                placeholder="자격증명을 입력하세요"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor={`${itemId}_발급기관`}
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                발급기관
+              </label>
+              <Input
+                id={`${itemId}_발급기관`}
+                name={`${itemId}_발급기관`}
+                value={formData[`${itemId}_발급기관`] || ""}
+                onChange={(e) =>
+                  onInputChange(`${itemId}_발급기관`, e.target.value)
+                }
+                placeholder="발급기관을 입력하세요"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor={`${itemId}_취득일`}
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                취득일
+              </label>
+              <Input
+                id={`${itemId}_취득일`}
+                name={`${itemId}_취득일`}
+                type="month"
+                value={formData[`${itemId}_취득일`] || ""}
+                onChange={(e) =>
+                  onInputChange(`${itemId}_취득일`, e.target.value)
+                }
+                placeholder="예: 2024-01"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  },
+  (prev, next) => {
+    const id = prev.itemId;
+    return (
+      prev.itemId === next.itemId &&
+      prev.index === next.index &&
+      prev.category === next.category &&
+      prev.formData[`${id}_자격증명`] === next.formData[`${id}_자격증명`] &&
+      prev.formData[`${id}_발급기관`] === next.formData[`${id}_발급기관`] &&
+      prev.formData[`${id}_취득일`] === next.formData[`${id}_취득일`]
+    );
+  }
+);
+
+// 어학성적 카드 컴포넌트
+const LanguageTestCard = React.memo(
+  ({
+    itemId,
+    index,
+    category,
+    formData,
+    onInputChange,
+    onRemove,
+  }: {
+    itemId: string;
+    index: number;
+    category: string;
+    formData: Record<string, string>;
+    onInputChange: (field: string, value: string) => void;
+    onRemove: () => void;
+  }) => {
+    const id = `${category}_${itemId}`;
+
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({
+      id,
+    });
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+    };
+
+    return (
+      <div ref={setNodeRef} style={style} className="mb-8">
+        <div className="p-6 border rounded-lg bg-card relative">
+          <div
+            {...attributes}
+            {...listeners}
+            className="absolute left-2 top-2 cursor-move text-gray-400 hover:text-gray-600 touch-none"
+          >
+            <GripVertical className="h-5 w-5" />
+          </div>
+
+          <div className="flex items-center justify-between mb-4 pl-6">
+            <h3 className="text-lg font-semibold">어학 성적 {index + 1}</h3>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={onRemove}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <label
+                htmlFor={`${itemId}_시험명`}
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                시험명
+              </label>
+              <Input
+                id={`${itemId}_시험명`}
+                name={`${itemId}_시험명`}
+                value={formData[`${itemId}_시험명`] || ""}
+                onChange={(e) =>
+                  onInputChange(`${itemId}_시험명`, e.target.value)
+                }
+                placeholder="예: TOEIC, TOEFL, IELTS"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor={`${itemId}_점수`}
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                점수
+              </label>
+              <Input
+                id={`${itemId}_점수`}
+                name={`${itemId}_점수`}
+                value={formData[`${itemId}_점수`] || ""}
+                onChange={(e) =>
+                  onInputChange(`${itemId}_점수`, e.target.value)
+                }
+                placeholder="예: 950, 7.5"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor={`${itemId}_응시일자`}
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                응시 일자
+              </label>
+              <Input
+                id={`${itemId}_응시일자`}
+                name={`${itemId}_응시일자`}
+                type="month"
+                value={formData[`${itemId}_응시일자`] || ""}
+                onChange={(e) =>
+                  onInputChange(`${itemId}_응시일자`, e.target.value)
+                }
+                placeholder="예: 2024-01"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  },
+  (prev, next) => {
+    const id = prev.itemId;
+    return (
+      prev.itemId === next.itemId &&
+      prev.index === next.index &&
+      prev.category === next.category &&
+      prev.formData[`${id}_시험명`] === next.formData[`${id}_시험명`] &&
+      prev.formData[`${id}_점수`] === next.formData[`${id}_점수`] &&
+      prev.formData[`${id}_응시일자`] === next.formData[`${id}_응시일자`]
+    );
+  }
+);
+
+// etc 카드 컴포넌트
+const EtcCard = React.memo(
+  ({
+    itemId,
+    index,
+    category,
+    formData,
+    onInputChange,
+    onRemove,
+  }: {
+    itemId: string;
+    index: number;
+    category: string;
+    formData: Record<string, string>;
+    onInputChange: (field: string, value: string) => void;
+    onRemove: () => void;
+  }) => {
+    const id = `${category}_${itemId}`;
+
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({
+      id,
+    });
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+    };
+
+    return (
+      <div ref={setNodeRef} style={style} className="mb-8">
+        <div className="p-6 border rounded-lg bg-card relative">
+          <div
+            {...attributes}
+            {...listeners}
+            className="absolute left-2 top-2 cursor-move text-gray-400 hover:text-gray-600 touch-none"
+          >
+            <GripVertical className="h-5 w-5" />
+          </div>
+
+          <div className="flex items-center justify-between mb-4 pl-6">
+            <h3 className="text-lg font-semibold">활동 {index + 1}</h3>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={onRemove}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <label
+                htmlFor={`${itemId}_활동명`}
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                활동명
+              </label>
+              <Input
+                id={`${itemId}_활동명`}
+                name={`${itemId}_활동명`}
+                value={formData[`${itemId}_활동명`] || ""}
+                onChange={(e) =>
+                  onInputChange(`${itemId}_활동명`, e.target.value)
+                }
+                placeholder="활동명을 입력하세요"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor={`${itemId}_링크`}
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                링크
+              </label>
+              <Input
+                id={`${itemId}_링크`}
+                name={`${itemId}_링크`}
+                type="url"
+                value={formData[`${itemId}_링크`] || ""}
+                onChange={(e) =>
+                  onInputChange(`${itemId}_링크`, e.target.value)
+                }
+                placeholder="https://example.com"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor={`${itemId}_내용`}
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                활동 내용
+              </label>
+              <textarea
+                id={`${itemId}_내용`}
+                name={`${itemId}_내용`}
+                rows={6}
+                value={formData[`${itemId}_내용`] || ""}
+                onChange={(e) =>
+                  onInputChange(`${itemId}_내용`, e.target.value)
+                }
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder="활동 내용을 입력하세요"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  },
+  (prev, next) => {
+    const id = prev.itemId;
+    return (
+      prev.itemId === next.itemId &&
+      prev.index === next.index &&
+      prev.category === next.category &&
+      prev.formData[`${id}_활동명`] === next.formData[`${id}_활동명`] &&
+      prev.formData[`${id}_링크`] === next.formData[`${id}_링크`] &&
+      prev.formData[`${id}_내용`] === next.formData[`${id}_내용`]
+    );
+  }
+);
+
+// 드래그 가능한 카드 컴포넌트 (다른 카테고리용)
+const DraggableCard = React.memo(
+  ({
+    field,
+    category,
+    index,
+    children,
+  }: {
+    field: string;
+    category: string;
+    index: number;
+    children: React.ReactNode;
+  }) => {
+    const id = `${category}_${field}`;
+
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({
+      id,
+    });
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+    };
+
+    return (
+      <div ref={setNodeRef} style={style} className="mb-8">
+        <div className="p-6 border rounded-lg bg-card relative">
+          <div
+            {...attributes}
+            {...listeners}
+            className="absolute left-2 top-2 cursor-move text-gray-400 hover:text-gray-600 touch-none"
+          >
+            <GripVertical className="h-5 w-5" />
+          </div>
+          {children}
+        </div>
+      </div>
+    );
+  },
+  (prevProps, nextProps) => {
+    return (
+      prevProps.field === nextProps.field &&
+      prevProps.category === nextProps.category &&
+      prevProps.index === nextProps.index
+    );
+  }
+);
 
 export default function AddResume() {
   // About Me 하위 항목들을 기본값으로 모두 선택
@@ -146,6 +1144,56 @@ export default function AddResume() {
     });
   };
 
+  // 드래그 앤 드롭으로 순서 변경 (dnd-kit sortable)
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id) return;
+
+    // id 형식: "category_field"
+    const activeId = active.id as string;
+    const overId = over.id as string;
+
+    const [activeCategory, ...activeParts] = activeId.split("_");
+    const [overCategory, ...overParts] = overId.split("_");
+
+    if (activeCategory !== overCategory) return;
+
+    const activeField = activeParts.join("_");
+    const overField = overParts.join("_");
+
+    setDynamicItems((prev) => {
+      const allItems = [...prev[activeCategory]];
+      const selectedItems = allItems.filter((id) => selectedFields[id]);
+      const unselectedItems = allItems.filter((id) => !selectedFields[id]);
+
+      const activeIndex = selectedItems.indexOf(activeField);
+      const overIndex = selectedItems.indexOf(overField);
+
+      if (activeIndex === -1 || overIndex === -1 || activeIndex === overIndex) {
+        return prev;
+      }
+
+      // arrayMove를 사용하여 순서 변경
+      const newSelectedItems = arrayMove(selectedItems, activeIndex, overIndex);
+
+      return {
+        ...prev,
+        [activeCategory]: [...newSelectedItems, ...unselectedItems],
+      };
+    });
+  };
+
+  // 센서 설정 (드래그 활성화 조건)
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // 8px 이동해야 드래그 시작
+      },
+    }),
+    useSensor(KeyboardSensor)
+  );
+
   const handleCheckboxChange = (field: string) => {
     setSelectedFields((prev) => ({
       ...prev,
@@ -163,12 +1211,15 @@ export default function AddResume() {
     }
   };
 
-  const handleInputChange = (field: string, value: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
+  const handleInputChange = React.useCallback(
+    (field: string, value: string) => {
+      setFormData((prev) => ({
+        ...prev,
+        [field]: value,
+      }));
+    },
+    []
+  );
 
   // 파일 업로드 핸들러
   const handleFileChange = (field: string, file: File | null) => {
@@ -193,7 +1244,11 @@ export default function AddResume() {
     reader.readAsDataURL(file);
   };
 
-  const renderFormField = (field: string) => {
+  const renderFormField = (
+    field: string,
+    category?: string,
+    index?: number
+  ) => {
     if (!selectedFields[field]) return null;
 
     // 동적 항목인지 확인 (Experience_xxx, Side Project_xxx 형식)
@@ -218,594 +1273,34 @@ export default function AddResume() {
     const isSideProjectField = field.startsWith("사이드프로젝트");
 
     if (isDynamicExperience || isExperienceField) {
-      const experienceNumber = isDynamicExperience
-        ? field.replace("Experience_", "")
-        : field.replace("경력", "");
-      const displayName = isDynamicExperience
-        ? `경력 ${dynamicItems["Experience"].indexOf(field) + 1}`
-        : field;
-      return (
-        <div key={field} className="mb-8 p-6 border rounded-lg bg-card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">{displayName}</h3>
-            {isDynamicExperience && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => handleRemoveDynamicItem("Experience", field)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
-          <div className="space-y-4">
-            <div>
-              <label
-                htmlFor={`${field}_회사명`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                근무회사명
-              </label>
-              <Input
-                id={`${field}_회사명`}
-                name={`${field}_회사명`}
-                value={formData[`${field}_회사명`] || ""}
-                onChange={(e) =>
-                  handleInputChange(`${field}_회사명`, e.target.value)
-                }
-                placeholder="회사명을 입력하세요"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor={`${field}_Role`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                Role
-              </label>
-              <Input
-                id={`${field}_Role`}
-                name={`${field}_Role`}
-                value={formData[`${field}_Role`] || ""}
-                onChange={(e) =>
-                  handleInputChange(`${field}_Role`, e.target.value)
-                }
-                placeholder="예: Python Backend, Python Chapter Lead"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label
-                  htmlFor={`${field}_시작일`}
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                >
-                  시작일
-                </label>
-                <Input
-                  id={`${field}_시작일`}
-                  name={`${field}_시작일`}
-                  type="month"
-                  value={formData[`${field}_시작일`] || ""}
-                  onChange={(e) =>
-                    handleInputChange(`${field}_시작일`, e.target.value)
-                  }
-                  placeholder="예: 2019-01"
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor={`${field}_종료일`}
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                >
-                  종료일
-                </label>
-                <Input
-                  id={`${field}_종료일`}
-                  name={`${field}_종료일`}
-                  type="month"
-                  value={formData[`${field}_종료일`] || ""}
-                  onChange={(e) =>
-                    handleInputChange(`${field}_종료일`, e.target.value)
-                  }
-                  placeholder="예: 2024-01 또는 현재"
-                />
-              </div>
-            </div>
-            <div>
-              <label
-                htmlFor={`${field}_스킬`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                기술 스택
-              </label>
-              <Input
-                id={`${field}_스킬`}
-                name={`${field}_스킬`}
-                value={formData[`${field}_스킬`] || ""}
-                onChange={(e) =>
-                  handleInputChange(`${field}_스킬`, e.target.value)
-                }
-                placeholder="예: Python, Flask, AWS, Swift (쉼표로 구분)"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor={`${field}_작업내용`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                주요 작업 내용
-              </label>
-              <textarea
-                id={`${field}_작업내용`}
-                name={`${field}_작업내용`}
-                rows={6}
-                value={formData[`${field}_작업내용`] || ""}
-                onChange={(e) =>
-                  handleInputChange(`${field}_작업내용`, e.target.value)
-                }
-                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                placeholder="주요 작업 내용을 입력하세요"
-              />
-            </div>
-          </div>
-        </div>
-      );
+      // Experience는 renderFormField를 거치지 않고 직접 ExperienceCard를 사용
+      // 이 부분은 실제로 호출되지 않아야 함 (직접 렌더링으로 대체됨)
+      return null;
     }
 
     if (isDynamicSideProject || isSideProjectField) {
-      const displayName = isDynamicSideProject
-        ? `프로젝트 ${dynamicItems["Side Project"].indexOf(field) + 1}`
-        : field;
-      return (
-        <div key={field} className="mb-8 p-6 border rounded-lg bg-card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">{displayName}</h3>
-            {isDynamicSideProject && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => handleRemoveDynamicItem("Side Project", field)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
-          <div className="space-y-4">
-            <div>
-              <label
-                htmlFor={`${field}_프로젝트명`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                사이드 프로젝트 명
-              </label>
-              <Input
-                id={`${field}_프로젝트명`}
-                name={`${field}_프로젝트명`}
-                value={formData[`${field}_프로젝트명`] || ""}
-                onChange={(e) =>
-                  handleInputChange(`${field}_프로젝트명`, e.target.value)
-                }
-                placeholder="프로젝트명을 입력하세요"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label
-                  htmlFor={`${field}_시작일`}
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                >
-                  시작일
-                </label>
-                <Input
-                  id={`${field}_시작일`}
-                  name={`${field}_시작일`}
-                  type="month"
-                  value={formData[`${field}_시작일`] || ""}
-                  onChange={(e) =>
-                    handleInputChange(`${field}_시작일`, e.target.value)
-                  }
-                  placeholder="예: 2023-01"
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor={`${field}_종료일`}
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                >
-                  종료일
-                </label>
-                <Input
-                  id={`${field}_종료일`}
-                  name={`${field}_종료일`}
-                  type="month"
-                  value={formData[`${field}_종료일`] || ""}
-                  onChange={(e) =>
-                    handleInputChange(`${field}_종료일`, e.target.value)
-                  }
-                  placeholder="예: 2023-06 또는 현재"
-                />
-              </div>
-            </div>
-            <div>
-              <label
-                htmlFor={`${field}_기술스택`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                기술 스택
-              </label>
-              <Input
-                id={`${field}_기술스택`}
-                name={`${field}_기술스택`}
-                value={formData[`${field}_기술스택`] || ""}
-                onChange={(e) =>
-                  handleInputChange(`${field}_기술스택`, e.target.value)
-                }
-                placeholder="예: React, TypeScript, Node.js (쉼표로 구분)"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor={`${field}_주요작업`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                주요 작업
-              </label>
-              <textarea
-                id={`${field}_주요작업`}
-                name={`${field}_주요작업`}
-                rows={6}
-                value={formData[`${field}_주요작업`] || ""}
-                onChange={(e) =>
-                  handleInputChange(`${field}_주요작업`, e.target.value)
-                }
-                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                placeholder="주요 작업 내용을 입력하세요"
-              />
-            </div>
-          </div>
-        </div>
-      );
+      // Side Project는 renderFormField를 거치지 않고 직접 SideProjectCard를 사용
+      return null;
     }
 
     if (isDynamicEducation) {
-      const displayName = `교육 ${dynamicItems["Education"].indexOf(field) + 1}`;
-      return (
-        <div key={field} className="mb-8 p-6 border rounded-lg bg-card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">{displayName}</h3>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => handleRemoveDynamicItem("Education", field)}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-          <div className="space-y-4">
-            <div>
-              <label
-                htmlFor={`${field}_기관명`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                교육 기관명
-              </label>
-              <Input
-                id={`${field}_기관명`}
-                name={`${field}_기관명`}
-                value={formData[`${field}_기관명`] || ""}
-                onChange={(e) =>
-                  handleInputChange(`${field}_기관명`, e.target.value)
-                }
-                placeholder="교육 기관명을 입력하세요"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor={`${field}_전공`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                전공
-              </label>
-              <Input
-                id={`${field}_전공`}
-                name={`${field}_전공`}
-                value={formData[`${field}_전공`] || ""}
-                onChange={(e) =>
-                  handleInputChange(`${field}_전공`, e.target.value)
-                }
-                placeholder="전공을 입력하세요"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label
-                  htmlFor={`${field}_시작일`}
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                >
-                  시작일
-                </label>
-                <Input
-                  id={`${field}_시작일`}
-                  name={`${field}_시작일`}
-                  type="month"
-                  value={formData[`${field}_시작일`] || ""}
-                  onChange={(e) =>
-                    handleInputChange(`${field}_시작일`, e.target.value)
-                  }
-                  placeholder="예: 2018-04"
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor={`${field}_종료일`}
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                >
-                  종료일
-                </label>
-                <Input
-                  id={`${field}_종료일`}
-                  name={`${field}_종료일`}
-                  type="month"
-                  value={formData[`${field}_종료일`] || ""}
-                  onChange={(e) =>
-                    handleInputChange(`${field}_종료일`, e.target.value)
-                  }
-                  placeholder="예: 2018-05"
-                />
-              </div>
-            </div>
-            <div>
-              <label
-                htmlFor={`${field}_내용`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                교육 내용
-              </label>
-              <textarea
-                id={`${field}_내용`}
-                name={`${field}_내용`}
-                rows={6}
-                value={formData[`${field}_내용`] || ""}
-                onChange={(e) =>
-                  handleInputChange(`${field}_내용`, e.target.value)
-                }
-                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                placeholder="교육 내용을 입력하세요"
-              />
-            </div>
-          </div>
-        </div>
-      );
+      // Education는 renderFormField를 거치지 않고 직접 EducationCard를 사용
+      return null;
     }
 
     if (isDynamicEtc) {
-      const displayName = `활동 ${dynamicItems["etc"].indexOf(field) + 1}`;
-      return (
-        <div key={field} className="mb-8 p-6 border rounded-lg bg-card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">{displayName}</h3>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => handleRemoveDynamicItem("etc", field)}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-          <div className="space-y-4">
-            <div>
-              <label
-                htmlFor={`${field}_활동명`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                활동명
-              </label>
-              <Input
-                id={`${field}_활동명`}
-                name={`${field}_활동명`}
-                value={formData[`${field}_활동명`] || ""}
-                onChange={(e) =>
-                  handleInputChange(`${field}_활동명`, e.target.value)
-                }
-                placeholder="활동명을 입력하세요"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor={`${field}_링크`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                링크
-              </label>
-              <Input
-                id={`${field}_링크`}
-                name={`${field}_링크`}
-                type="url"
-                value={formData[`${field}_링크`] || ""}
-                onChange={(e) =>
-                  handleInputChange(`${field}_링크`, e.target.value)
-                }
-                placeholder="https://example.com"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor={`${field}_내용`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                활동 내용
-              </label>
-              <textarea
-                id={`${field}_내용`}
-                name={`${field}_내용`}
-                rows={6}
-                value={formData[`${field}_내용`] || ""}
-                onChange={(e) =>
-                  handleInputChange(`${field}_내용`, e.target.value)
-                }
-                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                placeholder="활동 내용을 입력하세요"
-              />
-            </div>
-          </div>
-        </div>
-      );
+      // etc는 renderFormField를 거치지 않고 직접 EtcCard를 사용
+      return null;
     }
 
     if (isDynamicLanguageTest) {
-      const displayName = `어학 성적 ${dynamicItems["어학성적"].indexOf(field) + 1}`;
-      return (
-        <div key={field} className="mb-8 p-6 border rounded-lg bg-card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">{displayName}</h3>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => handleRemoveDynamicItem("어학성적", field)}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-          <div className="space-y-4">
-            <div>
-              <label
-                htmlFor={`${field}_시험명`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                시험명
-              </label>
-              <Input
-                id={`${field}_시험명`}
-                name={`${field}_시험명`}
-                value={formData[`${field}_시험명`] || ""}
-                onChange={(e) =>
-                  handleInputChange(`${field}_시험명`, e.target.value)
-                }
-                placeholder="예: TOEIC, TOEFL, IELTS"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor={`${field}_점수`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                점수
-              </label>
-              <Input
-                id={`${field}_점수`}
-                name={`${field}_점수`}
-                value={formData[`${field}_점수`] || ""}
-                onChange={(e) =>
-                  handleInputChange(`${field}_점수`, e.target.value)
-                }
-                placeholder="예: 950, 7.5"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor={`${field}_응시일자`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                응시 일자
-              </label>
-              <Input
-                id={`${field}_응시일자`}
-                name={`${field}_응시일자`}
-                type="month"
-                value={formData[`${field}_응시일자`] || ""}
-                onChange={(e) =>
-                  handleInputChange(`${field}_응시일자`, e.target.value)
-                }
-                placeholder="예: 2024-01"
-              />
-            </div>
-          </div>
-        </div>
-      );
+      // 어학성적는 renderFormField를 거치지 않고 직접 LanguageTestCard를 사용
+      return null;
     }
 
     if (isDynamicCertification) {
-      const displayName = `자격증 ${dynamicItems["자격증"].indexOf(field) + 1}`;
-      return (
-        <div key={field} className="mb-8 p-6 border rounded-lg bg-card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">{displayName}</h3>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => handleRemoveDynamicItem("자격증", field)}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-          <div className="space-y-4">
-            <div>
-              <label
-                htmlFor={`${field}_자격증명`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                자격증명
-              </label>
-              <Input
-                id={`${field}_자격증명`}
-                name={`${field}_자격증명`}
-                value={formData[`${field}_자격증명`] || ""}
-                onChange={(e) =>
-                  handleInputChange(`${field}_자격증명`, e.target.value)
-                }
-                placeholder="자격증명을 입력하세요"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor={`${field}_발급기관`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                발급기관
-              </label>
-              <Input
-                id={`${field}_발급기관`}
-                name={`${field}_발급기관`}
-                value={formData[`${field}_발급기관`] || ""}
-                onChange={(e) =>
-                  handleInputChange(`${field}_발급기관`, e.target.value)
-                }
-                placeholder="발급기관을 입력하세요"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor={`${field}_취득일`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                취득일
-              </label>
-              <Input
-                id={`${field}_취득일`}
-                name={`${field}_취득일`}
-                type="month"
-                value={formData[`${field}_취득일`] || ""}
-                onChange={(e) =>
-                  handleInputChange(`${field}_취득일`, e.target.value)
-                }
-                placeholder="예: 2024-01"
-              />
-            </div>
-          </div>
-        </div>
-      );
+      // 자격증는 renderFormField를 거치지 않고 직접 CertificationCard를 사용
+      return null;
     }
 
     return (
@@ -1669,266 +2164,462 @@ export default function AddResume() {
   };
 
   return (
-    <SidebarProvider defaultOpen={true}>
-      <div className="flex h-screen w-full overflow-hidden">
-        <Sidebar className="border-r border-sidebar-border bg-white">
-          <SidebarContent>
-            {Object.entries(resumeCategories).map(([category, items]) => {
-              const isDynamicCategory = [
-                "Experience",
-                "Side Project",
-                "Education",
-                "자격증",
-                "어학성적",
-                "etc",
-              ].includes(category);
-              const displayItems = isDynamicCategory
-                ? dynamicItems[category]
-                : items;
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragEnd={handleDragEnd}
+    >
+      <SidebarProvider defaultOpen={true}>
+        <div className="flex h-screen w-full overflow-hidden">
+          <Sidebar className="border-r border-sidebar-border bg-white">
+            <SidebarContent>
+              {Object.entries(resumeCategories).map(([category, items]) => {
+                const isDynamicCategory = [
+                  "Experience",
+                  "Side Project",
+                  "Education",
+                  "자격증",
+                  "어학성적",
+                  "etc",
+                ].includes(category);
+                const displayItems = isDynamicCategory
+                  ? dynamicItems[category]
+                  : items;
 
-              return (
-                <SidebarGroup key={category}>
-                  {isDynamicCategory ? (
-                    // 동적 카테고리 (체크박스만)
-                    <div className="px-2">
-                      <div className="flex items-center justify-between px-2 py-2">
-                        <label
-                          htmlFor={`category-${category}`}
-                          className="flex-1 cursor-pointer text-xs font-medium"
-                          style={{
-                            color: "hsl(var(--sidebar-foreground) / 0.7)",
-                          }}
-                        >
-                          {category}
-                        </label>
-                        <Checkbox
-                          id={`category-${category}`}
-                          checked={selectedFields[category] || false}
-                          onCheckedChange={() => handleCheckboxChange(category)}
-                        />
-                      </div>
-                      {selectedFields[category] && (
-                        <SidebarGroupContent>
-                          <SidebarMenu>
-                            {displayItems.map((itemId, index) => (
-                              <SidebarMenuItem key={itemId}>
+                return (
+                  <SidebarGroup key={category}>
+                    {isDynamicCategory ? (
+                      // 동적 카테고리 (체크박스만)
+                      <div className="px-2">
+                        <div className="flex items-center justify-between px-2 py-2">
+                          <label
+                            htmlFor={`category-${category}`}
+                            className="flex-1 cursor-pointer text-xs font-medium"
+                            style={{
+                              color: "hsl(var(--sidebar-foreground) / 0.7)",
+                            }}
+                          >
+                            {category}
+                          </label>
+                          <Checkbox
+                            id={`category-${category}`}
+                            checked={selectedFields[category] || false}
+                            onCheckedChange={() =>
+                              handleCheckboxChange(category)
+                            }
+                          />
+                        </div>
+                        {selectedFields[category] && (
+                          <SidebarGroupContent>
+                            <SidebarMenu>
+                              {displayItems.map((itemId, index) => (
+                                <SidebarMenuItem key={itemId}>
+                                  <SidebarMenuButton
+                                    className="w-full justify-start"
+                                    asChild
+                                  >
+                                    <div className="flex items-center gap-2 pl-6 pr-2 py-1.5">
+                                      <Checkbox
+                                        id={`${category}-${itemId}`}
+                                        checked={
+                                          selectedFields[itemId] || false
+                                        }
+                                        onCheckedChange={() =>
+                                          handleCheckboxChange(itemId)
+                                        }
+                                      />
+                                      <label
+                                        htmlFor={`${category}-${itemId}`}
+                                        className="flex-1 cursor-pointer text-sm"
+                                      >
+                                        {category === "Experience"
+                                          ? `경력 ${index + 1}`
+                                          : category === "Side Project"
+                                            ? `프로젝트 ${index + 1}`
+                                            : category === "Education"
+                                              ? `교육 ${index + 1}`
+                                              : category === "자격증"
+                                                ? `자격증 ${index + 1}`
+                                                : category === "어학성적"
+                                                  ? `어학 성적 ${index + 1}`
+                                                  : `항목 ${index + 1}`}
+                                      </label>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleRemoveDynamicItem(
+                                            category,
+                                            itemId
+                                          );
+                                        }}
+                                      >
+                                        <X className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </SidebarMenuButton>
+                                </SidebarMenuItem>
+                              ))}
+                              <SidebarMenuItem>
                                 <SidebarMenuButton
                                   className="w-full justify-start"
                                   asChild
                                 >
-                                  <div className="flex items-center gap-2 pl-6 pr-2 py-1.5">
-                                    <Checkbox
-                                      id={`${category}-${itemId}`}
-                                      checked={selectedFields[itemId] || false}
-                                      onCheckedChange={() =>
-                                        handleCheckboxChange(itemId)
-                                      }
-                                    />
-                                    <label
-                                      htmlFor={`${category}-${itemId}`}
-                                      className="flex-1 cursor-pointer text-sm"
-                                    >
-                                      {category === "Experience"
-                                        ? `경력 ${index + 1}`
-                                        : category === "Side Project"
-                                          ? `프로젝트 ${index + 1}`
-                                          : category === "Education"
-                                            ? `교육 ${index + 1}`
-                                            : category === "자격증"
-                                              ? `자격증 ${index + 1}`
-                                              : category === "어학성적"
-                                                ? `어학 성적 ${index + 1}`
-                                                : `항목 ${index + 1}`}
-                                    </label>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-6 w-6"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleAddDynamicItem(category)
+                                    }
+                                    className="flex items-center gap-2 pl-6 pr-2 py-1.5 text-sm text-muted-foreground hover:text-foreground"
+                                  >
+                                    <Plus className="h-4 w-4" />
+                                    <span>추가</span>
+                                  </button>
+                                </SidebarMenuButton>
+                              </SidebarMenuItem>
+                            </SidebarMenu>
+                          </SidebarGroupContent>
+                        )}
+                      </div>
+                    ) : (
+                      // About Me 등 일반 카테고리 (Collapsible)
+                      <Collapsible
+                        open={openCategories[category]}
+                        onOpenChange={(open) =>
+                          setOpenCategories((prev) => ({
+                            ...prev,
+                            [category]: open,
+                          }))
+                        }
+                      >
+                        <div className="px-2">
+                          <CollapsibleTrigger
+                            className="group flex w-full items-center justify-between px-2 py-2 rounded-md text-xs font-medium transition-colors hover:bg-accent cursor-pointer"
+                            style={{
+                              color: "hsl(var(--sidebar-foreground) / 0.7)",
+                            }}
+                          >
+                            <span>{category}</span>
+                            <ChevronDown
+                              className={`h-4 w-4 transition-transform duration-200 ${
+                                openCategories[category] ? "rotate-180" : ""
+                              }`}
+                            />
+                          </CollapsibleTrigger>
+                        </div>
+                        <CollapsibleContent>
+                          <SidebarGroupContent>
+                            <SidebarMenu>
+                              {items.map((item) => (
+                                <SidebarMenuItem key={item}>
+                                  <SidebarMenuButton
+                                    className="w-full justify-start"
+                                    asChild
+                                  >
+                                    <div className="flex items-center gap-2 pl-6 pr-2 py-1.5">
+                                      <Checkbox
+                                        id={`${category}-${item}`}
+                                        checked={selectedFields[item] || false}
+                                        onCheckedChange={() =>
+                                          handleCheckboxChange(item)
+                                        }
+                                      />
+                                      <label
+                                        htmlFor={`${category}-${item}`}
+                                        className="flex-1 cursor-pointer text-sm"
+                                      >
+                                        {item}
+                                      </label>
+                                    </div>
+                                  </SidebarMenuButton>
+                                </SidebarMenuItem>
+                              ))}
+                            </SidebarMenu>
+                          </SidebarGroupContent>
+                        </CollapsibleContent>
+                      </Collapsible>
+                    )}
+                  </SidebarGroup>
+                );
+              })}
+            </SidebarContent>
+          </Sidebar>
+
+          <SidebarInset className="flex-1 border-l border-sidebar-border bg-white flex flex-col overflow-hidden">
+            <div className="flex h-16 shrink-0 items-center justify-between gap-2 border-b px-4">
+              <div className="flex items-center gap-2">
+                <SidebarTrigger />
+                <h1 className="text-xl font-semibold">이력서 작성</h1>
+              </div>
+              {isPreviewMode && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsPreviewMode(false)}
+                >
+                  편집 모드로 돌아가기
+                </Button>
+              )}
+            </div>
+
+            <div className="flex-1 overflow-auto p-6 bg-white">
+              {isPreviewMode ? (
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-12 min-h-full">
+                  {renderPreview()}
+                </div>
+              ) : (
+                <div className="mx-auto max-w-3xl">
+                  <Card className="mb-6">
+                    <CardHeader>
+                      <CardTitle>이력서 정보 입력</CardTitle>
+                      <CardDescription>
+                        왼쪽 사이드바에서 표시할 항목을 선택하고 정보를
+                        입력하세요
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <form className="space-y-6">
+                        {/* About Me 필드들 */}
+                        {resumeCategories["About Me"]
+                          .filter((field) => selectedFields[field])
+                          .map((field) => renderFormField(field))}
+
+                        {/* 동적 카테고리 필드들 */}
+                        {Object.entries(dynamicItems).map(
+                          ([category, items]) => {
+                            const filteredItems = items.filter(
+                              (itemId) => selectedFields[itemId]
+                            );
+                            if (filteredItems.length === 0) return null;
+
+                            const itemIds = filteredItems.map(
+                              (itemId) => `${category}_${itemId}`
+                            );
+
+                            // 각 카테고리별 독립 컴포넌트 사용
+                            if (category === "Experience") {
+                              return (
+                                <SortableContext
+                                  key={category}
+                                  items={itemIds}
+                                  strategy={verticalListSortingStrategy}
+                                >
+                                  {filteredItems.map((itemId, index) => (
+                                    <ExperienceCard
+                                      key={itemId}
+                                      itemId={itemId}
+                                      index={index}
+                                      category={category}
+                                      formData={formData}
+                                      onInputChange={handleInputChange}
+                                      onRemove={() =>
                                         handleRemoveDynamicItem(
                                           category,
                                           itemId
-                                        );
-                                      }}
-                                    >
-                                      <X className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                </SidebarMenuButton>
-                              </SidebarMenuItem>
-                            ))}
-                            <SidebarMenuItem>
-                              <SidebarMenuButton
-                                className="w-full justify-start"
-                                asChild
-                              >
-                                <button
-                                  type="button"
-                                  onClick={() => handleAddDynamicItem(category)}
-                                  className="flex items-center gap-2 pl-6 pr-2 py-1.5 text-sm text-muted-foreground hover:text-foreground"
-                                >
-                                  <Plus className="h-4 w-4" />
-                                  <span>추가</span>
-                                </button>
-                              </SidebarMenuButton>
-                            </SidebarMenuItem>
-                          </SidebarMenu>
-                        </SidebarGroupContent>
-                      )}
-                    </div>
-                  ) : (
-                    // About Me 등 일반 카테고리 (Collapsible)
-                    <Collapsible
-                      open={openCategories[category]}
-                      onOpenChange={(open) =>
-                        setOpenCategories((prev) => ({
-                          ...prev,
-                          [category]: open,
-                        }))
-                      }
-                    >
-                      <div className="px-2">
-                        <CollapsibleTrigger
-                          className="group flex w-full items-center justify-between px-2 py-2 rounded-md text-xs font-medium transition-colors hover:bg-accent cursor-pointer"
-                          style={{
-                            color: "hsl(var(--sidebar-foreground) / 0.7)",
-                          }}
-                        >
-                          <span>{category}</span>
-                          <ChevronDown
-                            className={`h-4 w-4 transition-transform duration-200 ${
-                              openCategories[category] ? "rotate-180" : ""
-                            }`}
-                          />
-                        </CollapsibleTrigger>
-                      </div>
-                      <CollapsibleContent>
-                        <SidebarGroupContent>
-                          <SidebarMenu>
-                            {items.map((item) => (
-                              <SidebarMenuItem key={item}>
-                                <SidebarMenuButton
-                                  className="w-full justify-start"
-                                  asChild
-                                >
-                                  <div className="flex items-center gap-2 pl-6 pr-2 py-1.5">
-                                    <Checkbox
-                                      id={`${category}-${item}`}
-                                      checked={selectedFields[item] || false}
-                                      onCheckedChange={() =>
-                                        handleCheckboxChange(item)
+                                        )
                                       }
                                     />
-                                    <label
-                                      htmlFor={`${category}-${item}`}
-                                      className="flex-1 cursor-pointer text-sm"
-                                    >
-                                      {item}
-                                    </label>
-                                  </div>
-                                </SidebarMenuButton>
-                              </SidebarMenuItem>
-                            ))}
-                          </SidebarMenu>
-                        </SidebarGroupContent>
-                      </CollapsibleContent>
-                    </Collapsible>
-                  )}
-                </SidebarGroup>
-              );
-            })}
-          </SidebarContent>
-        </Sidebar>
+                                  ))}
+                                </SortableContext>
+                              );
+                            }
 
-        <SidebarInset className="flex-1 border-l border-sidebar-border bg-white flex flex-col overflow-hidden">
-          <div className="flex h-16 shrink-0 items-center justify-between gap-2 border-b px-4">
-            <div className="flex items-center gap-2">
-              <SidebarTrigger />
-              <h1 className="text-xl font-semibold">이력서 작성</h1>
+                            if (category === "Side Project") {
+                              return (
+                                <SortableContext
+                                  key={category}
+                                  items={itemIds}
+                                  strategy={verticalListSortingStrategy}
+                                >
+                                  {filteredItems.map((itemId, index) => (
+                                    <SideProjectCard
+                                      key={itemId}
+                                      itemId={itemId}
+                                      index={index}
+                                      category={category}
+                                      formData={formData}
+                                      onInputChange={handleInputChange}
+                                      onRemove={() =>
+                                        handleRemoveDynamicItem(
+                                          category,
+                                          itemId
+                                        )
+                                      }
+                                    />
+                                  ))}
+                                </SortableContext>
+                              );
+                            }
+
+                            if (category === "Education") {
+                              return (
+                                <SortableContext
+                                  key={category}
+                                  items={itemIds}
+                                  strategy={verticalListSortingStrategy}
+                                >
+                                  {filteredItems.map((itemId, index) => (
+                                    <EducationCard
+                                      key={itemId}
+                                      itemId={itemId}
+                                      index={index}
+                                      category={category}
+                                      formData={formData}
+                                      onInputChange={handleInputChange}
+                                      onRemove={() =>
+                                        handleRemoveDynamicItem(
+                                          category,
+                                          itemId
+                                        )
+                                      }
+                                    />
+                                  ))}
+                                </SortableContext>
+                              );
+                            }
+
+                            if (category === "자격증") {
+                              return (
+                                <SortableContext
+                                  key={category}
+                                  items={itemIds}
+                                  strategy={verticalListSortingStrategy}
+                                >
+                                  {filteredItems.map((itemId, index) => (
+                                    <CertificationCard
+                                      key={itemId}
+                                      itemId={itemId}
+                                      index={index}
+                                      category={category}
+                                      formData={formData}
+                                      onInputChange={handleInputChange}
+                                      onRemove={() =>
+                                        handleRemoveDynamicItem(
+                                          category,
+                                          itemId
+                                        )
+                                      }
+                                    />
+                                  ))}
+                                </SortableContext>
+                              );
+                            }
+
+                            if (category === "어학성적") {
+                              return (
+                                <SortableContext
+                                  key={category}
+                                  items={itemIds}
+                                  strategy={verticalListSortingStrategy}
+                                >
+                                  {filteredItems.map((itemId, index) => (
+                                    <LanguageTestCard
+                                      key={itemId}
+                                      itemId={itemId}
+                                      index={index}
+                                      category={category}
+                                      formData={formData}
+                                      onInputChange={handleInputChange}
+                                      onRemove={() =>
+                                        handleRemoveDynamicItem(
+                                          category,
+                                          itemId
+                                        )
+                                      }
+                                    />
+                                  ))}
+                                </SortableContext>
+                              );
+                            }
+
+                            if (category === "etc") {
+                              return (
+                                <SortableContext
+                                  key={category}
+                                  items={itemIds}
+                                  strategy={verticalListSortingStrategy}
+                                >
+                                  {filteredItems.map((itemId, index) => (
+                                    <EtcCard
+                                      key={itemId}
+                                      itemId={itemId}
+                                      index={index}
+                                      category={category}
+                                      formData={formData}
+                                      onInputChange={handleInputChange}
+                                      onRemove={() =>
+                                        handleRemoveDynamicItem(
+                                          category,
+                                          itemId
+                                        )
+                                      }
+                                    />
+                                  ))}
+                                </SortableContext>
+                              );
+                            }
+
+                            // 기존 방식 유지 (혹시 모를 다른 카테고리)
+                            return (
+                              <SortableContext
+                                key={category}
+                                items={itemIds}
+                                strategy={verticalListSortingStrategy}
+                              >
+                                {filteredItems.map((itemId, index) =>
+                                  renderFormField(itemId, category, index)
+                                )}
+                              </SortableContext>
+                            );
+                          }
+                        )}
+
+                        {Object.values(resumeCategories)
+                          .flat()
+                          .filter((field) => selectedFields[field]).length ===
+                          0 && (
+                          <div className="py-12 text-center text-muted-foreground">
+                            <p className="text-lg mb-2">항목을 선택해주세요</p>
+                            <p className="text-sm">
+                              왼쪽 사이드바에서 표시할 항목을 체크박스로
+                              선택하세요
+                            </p>
+                          </div>
+                        )}
+
+                        {Object.values(resumeCategories)
+                          .flat()
+                          .filter((field) => selectedFields[field]).length >
+                          0 && (
+                          <div className="flex gap-4 pt-4">
+                            <Button type="submit" className="flex-1">
+                              저장하기
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="flex-1"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                setIsPreviewMode(true);
+                              }}
+                            >
+                              미리보기
+                            </Button>
+                          </div>
+                        )}
+                      </form>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
             </div>
-            {isPreviewMode && (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsPreviewMode(false)}
-              >
-                편집 모드로 돌아가기
-              </Button>
-            )}
-          </div>
-
-          <div className="flex-1 overflow-auto p-6 bg-white">
-            {isPreviewMode ? (
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-12 min-h-full">
-                {renderPreview()}
-              </div>
-            ) : (
-              <div className="mx-auto max-w-3xl">
-                <Card className="mb-6">
-                  <CardHeader>
-                    <CardTitle>이력서 정보 입력</CardTitle>
-                    <CardDescription>
-                      왼쪽 사이드바에서 표시할 항목을 선택하고 정보를 입력하세요
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <form className="space-y-6">
-                      {/* About Me 필드들 */}
-                      {resumeCategories["About Me"]
-                        .filter((field) => selectedFields[field])
-                        .map((field) => renderFormField(field))}
-
-                      {/* 동적 카테고리 필드들 */}
-                      {Object.entries(dynamicItems).map(([category, items]) =>
-                        items
-                          .filter((itemId) => selectedFields[itemId])
-                          .map((itemId) => renderFormField(itemId))
-                      )}
-
-                      {Object.values(resumeCategories)
-                        .flat()
-                        .filter((field) => selectedFields[field]).length ===
-                        0 && (
-                        <div className="py-12 text-center text-muted-foreground">
-                          <p className="text-lg mb-2">항목을 선택해주세요</p>
-                          <p className="text-sm">
-                            왼쪽 사이드바에서 표시할 항목을 체크박스로
-                            선택하세요
-                          </p>
-                        </div>
-                      )}
-
-                      {Object.values(resumeCategories)
-                        .flat()
-                        .filter((field) => selectedFields[field]).length >
-                        0 && (
-                        <div className="flex gap-4 pt-4">
-                          <Button type="submit" className="flex-1">
-                            저장하기
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="flex-1"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              setIsPreviewMode(true);
-                            }}
-                          >
-                            미리보기
-                          </Button>
-                        </div>
-                      )}
-                    </form>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-          </div>
-        </SidebarInset>
-      </div>
-    </SidebarProvider>
+          </SidebarInset>
+        </div>
+      </SidebarProvider>
+    </DndContext>
   );
 }
