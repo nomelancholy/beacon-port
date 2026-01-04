@@ -1,10 +1,22 @@
-"use client";
-
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, useInView } from "motion/react";
 import type { MotionProps } from "motion/react";
 
 import { cn } from "@/lib/utils";
+
+// 클라이언트에서만 motion.create 사용
+const createMotionComponent = (Component: React.ElementType) => {
+  if (typeof window === "undefined") {
+    return Component;
+  }
+  try {
+    return motion.create(Component, {
+      forwardMotionProps: true,
+    });
+  } catch {
+    return Component;
+  }
+};
 
 interface TypingAnimationProps extends MotionProps {
   children?: string;
@@ -40,9 +52,11 @@ export function TypingAnimation({
   cursorStyle = "line",
   ...props
 }: TypingAnimationProps) {
-  const MotionComponent = motion.create(Component, {
-    forwardMotionProps: true,
-  });
+  // 클라이언트에서만 motion.create 사용
+  const MotionComponent = useMemo(
+    () => createMotionComponent(Component),
+    [Component]
+  );
 
   const [displayedText, setDisplayedText] = useState<string>("");
   const [currentWordIndex, setCurrentWordIndex] = useState(0);

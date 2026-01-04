@@ -2,14 +2,14 @@ import * as React from "react";
 import type { Route } from "./+types/my-resume";
 import { Link, useNavigate } from "react-router";
 import { Plus } from "lucide-react";
-import { Button } from "../components/ui/button";
+import { Button } from "../../../components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "../components/ui/card";
+} from "../../../components/ui/card";
 
 export function meta({}: Route.MetaArgs) {
   return [

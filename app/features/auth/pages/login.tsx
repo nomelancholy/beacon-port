@@ -1,44 +1,40 @@
-import * as React from "react";
-import type { Route } from "./+types/signup";
+import type { Route } from "./+types/login";
 import { Link } from "react-router";
-import { Button } from "../components/ui/button";
-import { Input } from "../components/ui/input";
+import { Button } from "../../../components/ui/button";
+import { Input } from "../../../components/ui/input";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "../components/ui/card";
+} from "../../../components/ui/card";
 
 export function meta({}: Route.MetaArgs) {
   return [
-    { title: "회원가입 - Beacon Port" },
+    { title: "로그인 / 회원가입 - Beacon Port" },
     {
       name: "description",
-      content: "Beacon Port에 회원가입하세요",
+      content: "Beacon Port에 로그인하거나 회원가입하세요",
     },
   ];
 }
 
-export default function Signup() {
-  const handleSignup = (e: React.FormEvent<HTMLFormElement>) => {
+export default function Login() {
+  const handleEmailLogin = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const nickname = formData.get("nickname") as string;
-    const email = formData.get("email") as string;
-    // TODO: 회원가입 로직 구현
-    console.log("Signup:", { nickname, email });
+    // TODO: 이메일 로그인 로직 구현
+    console.log("Email login");
   };
 
-  const handleGoogleSignup = () => {
-    // TODO: Google 회원가입 로직 구현
-    console.log("Google signup");
+  const handleGoogleLogin = () => {
+    // TODO: Google 로그인 로직 구현
+    console.log("Google login");
   };
 
-  const handleGithubSignup = () => {
-    // TODO: GitHub 회원가입 로직 구현
-    console.log("GitHub signup");
+  const handleGithubLogin = () => {
+    // TODO: GitHub 로그인 로직 구현
+    console.log("GitHub login");
   };
 
   return (
@@ -46,36 +42,15 @@ export default function Signup() {
       <Card className="w-full max-w-md bg-white dark:bg-gray-800">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold text-gray-900 dark:text-white">
-            회원가입
+            로그인 / 회원가입
           </CardTitle>
           <CardDescription className="text-gray-600 dark:text-gray-400">
-            Beacon Port에 가입하고 시작하세요
+            Beacon Port에 오신 것을 환영합니다
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Signup Form */}
-          <form onSubmit={handleSignup} className="space-y-4">
-            <div className="space-y-2">
-              <label
-                htmlFor="nickname"
-                className="text-sm font-medium text-gray-900 dark:text-white"
-              >
-                영어 닉네임
-              </label>
-              <Input
-                id="nickname"
-                name="nickname"
-                type="text"
-                placeholder="johndoe"
-                pattern="[a-zA-Z0-9_]+"
-                title="영문자, 숫자, 언더스코어(_)만 사용 가능합니다"
-                required
-                className="bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                영문자, 숫자, 언더스코어(_)만 사용 가능합니다
-              </p>
-            </div>
+          {/* Email Login Form */}
+          <form onSubmit={handleEmailLogin} className="space-y-4">
             <div className="space-y-2">
               <label
                 htmlFor="email"
@@ -85,7 +60,6 @@ export default function Signup() {
               </label>
               <Input
                 id="email"
-                name="email"
                 type="email"
                 placeholder="name@example.com"
                 required
@@ -93,20 +67,20 @@ export default function Signup() {
               />
             </div>
             <Button type="submit" className="w-full">
-              회원가입
+              이메일로 로그인
             </Button>
           </form>
 
-          {/* Login link */}
+          {/* Sign up link */}
           <div className="text-center text-sm">
             <span className="text-gray-600 dark:text-gray-400">
-              이미 계정이 있으신가요?{" "}
+              계정이 없으신가요?{" "}
             </span>
             <Link
-              to="/login"
+              to="/signup"
               className="text-primary hover:underline font-medium"
             >
-              로그인하기
+              가입하러 가기
             </Link>
           </div>
 
@@ -122,13 +96,13 @@ export default function Signup() {
             </div>
           </div>
 
-          {/* Social Signup Buttons */}
+          {/* Social Login Buttons */}
           <div className="space-y-3">
             <Button
               type="button"
               variant="outline"
               className="w-full"
-              onClick={handleGoogleSignup}
+              onClick={handleGoogleLogin}
             >
               <svg
                 className="mr-2 h-4 w-4"
@@ -152,13 +126,13 @@ export default function Signup() {
                   fill="#EA4335"
                 />
               </svg>
-              Google로 가입하기
+              Google로 계속하기
             </Button>
             <Button
               type="button"
               variant="outline"
               className="w-full"
-              onClick={handleGithubSignup}
+              onClick={handleGithubLogin}
             >
               <svg
                 className="mr-2 h-4 w-4"
@@ -171,7 +145,7 @@ export default function Signup() {
                   clipRule="evenodd"
                 />
               </svg>
-              GitHub로 가입하기
+              GitHub로 계속하기
             </Button>
           </div>
 

@@ -39,22 +39,22 @@ import {
   SidebarProvider,
   SidebarTrigger,
   SidebarInset,
-} from "../components/ui/sidebar";
-import { Checkbox } from "../components/ui/checkbox";
+} from "../../../components/ui/sidebar";
+import { Checkbox } from "../../../components/ui/checkbox";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "../components/ui/collapsible";
-import { Input } from "../components/ui/input";
-import { Button } from "../components/ui/button";
+} from "../../../components/ui/collapsible";
+import { Input } from "../../../components/ui/input";
+import { Button } from "../../../components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "../components/ui/card";
+} from "../../../components/ui/card";
 
 export function meta({}: Route.MetaArgs) {
   return [
