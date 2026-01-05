@@ -266,7 +266,7 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
             <Button
               variant="ghost"
               onClick={() => navigate("/my-resume")}
-              className="group text-white hover:text-white/90 hover:bg-gray-800/50 transition-all duration-200 ease-in-out transform hover:scale-105"
+              className="group text-white hover:text-white/90 hover:bg-gray-800/50 transition-all duration-200 ease-in-out transform hover:scale-105 cursor-pointer"
             >
               <ArrowLeft className="h-4 w-4 mr-2 transition-transform duration-200 group-hover:-translate-x-1" />
               목록으로
@@ -276,7 +276,7 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
               <Button
                 variant="outline"
                 onClick={handleEdit}
-                className="group text-white border-gray-600 hover:bg-gray-800 hover:text-white hover:border-gray-500 transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95"
+                className="group text-white border-gray-600 hover:bg-gray-800 hover:text-white hover:border-gray-500 transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95 cursor-pointer"
               >
                 <Edit className="h-4 w-4 mr-2 transition-transform duration-200 group-hover:rotate-12" />
                 수정
@@ -284,7 +284,7 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
               <Button
                 variant="outline"
                 onClick={handleShare}
-                className="group text-white border-gray-600 hover:bg-gray-800 hover:text-white hover:border-gray-500 transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95"
+                className="group text-white border-gray-600 hover:bg-gray-800 hover:text-white hover:border-gray-500 transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95 cursor-pointer"
               >
                 <Share2 className="h-4 w-4 mr-2 transition-transform duration-200 group-hover:rotate-12" />
                 공유
@@ -292,7 +292,7 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
               <Button
                 variant="outline"
                 onClick={handlePrint}
-                className="group text-white border-gray-600 hover:bg-gray-800 hover:text-white hover:border-gray-500 transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95"
+                className="group text-white border-gray-600 hover:bg-gray-800 hover:text-white hover:border-gray-500 transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95 cursor-pointer"
               >
                 <Printer className="h-4 w-4 mr-2 transition-transform duration-200 group-hover:rotate-12" />
                 출력

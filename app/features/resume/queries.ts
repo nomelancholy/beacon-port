@@ -16,80 +16,63 @@ export const getResumes = async (userId: string) => {
 };
 
 export const getResumeById = async (resumeId: string) => {
-  // 이력서 기본 정보
-  const { data: resume, error: resumeError } = await supabaseClient
+  // Nested select를 사용하여 이력서와 관련 데이터를 한 번에 가져오기
+  const { data, error } = await supabaseClient
     .from("resumes")
-    .select("*")
+    .select(
+      `
+      *,
+      experiences (
+        *
+      ),
+      side_projects (
+        *
+      ),
+      educations (
+        *
+      ),
+      certifications (
+        *
+      ),
+      language_tests (
+        *
+      ),
+      etcs (
+        *
+      )
+    `
+    )
     .eq("id", resumeId)
     .single();
 
-  if (resumeError) {
-    throw new Error(resumeError.message);
+  if (error) {
+    throw new Error(error.message);
   }
 
-  // 관련 데이터 가져오기
-  const [
-    experiences,
-    sideProjects,
-    educations,
-    certifications,
-    languageTests,
-    etcs,
-  ] = await Promise.all([
-    supabaseClient
-      .from("experiences")
-      .select("*")
-      .eq("resume_id", resumeId)
-      .order("display_order", { ascending: true }),
-    supabaseClient
-      .from("side_projects")
-      .select("*")
-      .eq("resume_id", resumeId)
-      .order("display_order", { ascending: true }),
-    supabaseClient
-      .from("educations")
-      .select("*")
-      .eq("resume_id", resumeId)
-      .order("display_order", { ascending: true }),
-    supabaseClient
-      .from("certifications")
-      .select("*")
-      .eq("resume_id", resumeId)
-      .order("display_order", { ascending: true }),
-    supabaseClient
-      .from("language_tests")
-      .select("*")
-      .eq("resume_id", resumeId)
-      .order("display_order", { ascending: true }),
-    supabaseClient
-      .from("etcs")
-      .select("*")
-      .eq("resume_id", resumeId)
-      .order("display_order", { ascending: true }),
-  ]);
-
-  // 각 쿼리의 에러 확인 (데이터가 없어도 에러가 아닐 수 있음)
-  const errors = [
-    experiences.error,
-    sideProjects.error,
-    educations.error,
-    certifications.error,
-    languageTests.error,
-    etcs.error,
-  ].filter(Boolean);
-
-  if (errors.length > 0) {
-    console.error("Error fetching related data:", errors);
-    // 에러가 있어도 빈 배열로 반환하여 계속 진행
+  if (!data) {
+    throw new Error("Resume not found");
   }
 
+  // Nested 데이터를 정렬하여 반환
   return {
-    resume,
-    experiences: experiences.data || [],
-    sideProjects: sideProjects.data || [],
-    educations: educations.data || [],
-    certifications: certifications.data || [],
-    languageTests: languageTests.data || [],
-    etcs: etcs.data || [],
+    resume: data,
+    experiences: (data.experiences || []).sort(
+      (a: any, b: any) => a.display_order - b.display_order
+    ),
+    sideProjects: (data.side_projects || []).sort(
+      (a: any, b: any) => a.display_order - b.display_order
+    ),
+    educations: (data.educations || []).sort(
+      (a: any, b: any) => a.display_order - b.display_order
+    ),
+    certifications: (data.certifications || []).sort(
+      (a: any, b: any) => a.display_order - b.display_order
+    ),
+    languageTests: (data.language_tests || []).sort(
+      (a: any, b: any) => a.display_order - b.display_order
+    ),
+    etcs: (data.etcs || []).sort(
+      (a: any, b: any) => a.display_order - b.display_order
+    ),
   };
 };
