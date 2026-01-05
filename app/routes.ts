@@ -6,4 +6,5 @@ export default [
   route("signup", "features/auth/pages/signup.tsx"),
   route("my-resume", "features/resume/pages/my-resume.tsx"),
   route("add-resume", "features/resume/pages/add-resume.tsx"),
+  route("resume/:id", "features/resume/pages/resume-detail.tsx"),
 ] satisfies RouteConfig;

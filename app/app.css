@@ -94,3 +94,38 @@ body {
 .animate-blink-cursor {
   animation: blink-cursor 1s infinite;
 }
+
+/* Print styles */
+@media print {
+  /* Hide header and navigation */
+  .print\\:hidden {
+    display: none !important;
+  }
+  
+  /* Ensure proper page breaks */
+  .print\\:break-after {
+    page-break-after: always;
+  }
+  
+  /* Remove shadows and borders for printing */
+  .print\\:shadow-none {
+    box-shadow: none !important;
+  }
+  
+  /* Adjust padding for print */
+  .print\\:p-8 {
+    padding: 2rem !important;
+  }
+  
+  /* Ensure background colors print */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+  
+  /* Hide elements with no-print class */
+  .no-print {
+    display: none !important;
+  }
+}

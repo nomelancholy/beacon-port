@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "../../../components/ui/card";
+import { getResumes } from "../queries";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -20,6 +21,12 @@ export function meta({}: Route.MetaArgs) {
     },
   ];
 }
+
+export const loader = async () => {
+  const resumes = await getResumes("e220c504-2aa2-4360-9ed4-1cc01d2e5daf");
+  console.log("resumes :>> ", resumes);
+  return { resumes };
+};
 
 // 임시 데이터 (나중에 실제 데이터로 교체)
 const mockResumes = [
@@ -37,16 +44,16 @@ const mockResumes = [
   },
 ];
 
-export default function MyResume() {
+export default function MyResume({ loaderData }: Route.ComponentProps) {
+  const { resumes } = loaderData;
   const navigate = useNavigate();
 
   const handleAddResume = () => {
     navigate("/add-resume");
   };
 
-  const handleResumeClick = (id: number) => {
-    // TODO: 이력서 상세 페이지로 이동
-    console.log("View/Edit resume:", id);
+  const handleResumeClick = (id: string) => {
+    navigate(`/resume/${id}`);
   };
 
   return (
@@ -83,11 +90,11 @@ export default function MyResume() {
           </div>
         ) : (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {mockResumes.map((resume) => (
+            {resumes.map((resume) => (
               <Card
                 key={resume.id}
                 className="cursor-pointer border-gray-700 bg-gray-800 hover:border-gray-600 hover:shadow-lg transition-all"
-                onClick={() => handleResumeClick(resume.id)}
+                onClick={() => resume.id && handleResumeClick(resume.id)}
               >
                 <CardHeader>
                   <div className="flex items-start justify-between">
@@ -96,17 +103,22 @@ export default function MyResume() {
                         {resume.title}
                       </CardTitle>
                       <CardDescription className="mt-2 text-white/70">
-                        최종 수정: {resume.updatedAt}
+                        최종 수정:{" "}
+                        {resume.updated_at
+                          ? new Date(resume.updated_at).toLocaleDateString(
+                              "ko-KR"
+                            )
+                          : "날짜 없음"}
                       </CardDescription>
                     </div>
                     <span
                       className={`rounded-full px-2 py-1 text-xs font-medium ${
-                        resume.status === "공개"
+                        resume.is_public
                           ? "bg-green-900/50 text-green-300"
                           : "bg-gray-700 text-gray-300"
                       }`}
                     >
-                      {resume.status}
+                      {resume.isPublic ? "공개" : "비공개"}
                     </span>
                   </div>
                 </CardHeader>
