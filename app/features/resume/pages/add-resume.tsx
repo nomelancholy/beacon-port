@@ -1,5 +1,6 @@
 import * as React from "react";
 import type { Route } from "./+types/add-resume";
+import { useNavigate } from "react-router";
 import {
   ChevronDown,
   Github,
@@ -10,6 +11,7 @@ import {
   Plus,
   X,
   GripVertical,
+  ArrowLeft,
 } from "lucide-react";
 import {
   DndContext,
@@ -1073,6 +1075,8 @@ const DraggableCard = React.memo(
 );
 
 export default function AddResume() {
+  const navigate = useNavigate();
+
   // About Me 하위 항목들을 기본값으로 모두 선택
   const getInitialSelectedFields = () => {
     const fields: Record<string, boolean> = {};
@@ -2352,6 +2356,14 @@ export default function AddResume() {
             <div className="flex h-16 shrink-0 items-center justify-between gap-2 border-b px-4">
               <div className="flex items-center gap-2">
                 <SidebarTrigger />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => navigate("/my-resume")}
+                  className="group text-gray-700 hover:text-gray-900 hover:bg-gray-100 transition-all duration-200 ease-in-out cursor-pointer"
+                >
+                  <ArrowLeft className="h-4 w-4 transition-transform duration-200 group-hover:-translate-x-1" />
+                </Button>
                 <h1 className="text-xl font-semibold">이력서 작성</h1>
               </div>
               {isPreviewMode && (

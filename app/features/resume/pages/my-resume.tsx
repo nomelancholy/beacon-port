@@ -1,7 +1,7 @@
 import * as React from "react";
 import type { Route } from "./+types/my-resume";
-import { Link, useNavigate } from "react-router";
-import { Plus } from "lucide-react";
+import { Link, useNavigate, useFetcher } from "react-router";
+import { Plus, LogOut, User } from "lucide-react";
 import { Button } from "../../../components/ui/button";
 import {
   Card,
@@ -12,6 +12,7 @@ import {
 } from "../../../components/ui/card";
 import { getResumes } from "../queries";
 import { createSupabaseServerClient } from "~/supabase/server";
+import { redirect } from "react-router";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -25,17 +26,45 @@ export function meta({}: Route.MetaArgs) {
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const supabase = createSupabaseServerClient(request);
-  const resumes = await getResumes(
-    supabase,
-    "e220c504-2aa2-4360-9ed4-1cc01d2e5daf"
-  );
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Response("Unauthorized", { status: 401 });
+  }
+
+  const resumes = await getResumes(supabase, user.id);
   console.log("resumes :>> ", resumes);
   return { resumes };
+};
+
+export const action = async ({ request }: Route.ActionArgs) => {
+  if (request.method === "POST") {
+    const formData = await request.formData();
+    const intent = formData.get("intent");
+
+    if (intent === "logout") {
+      const headers = new Headers();
+      const supabase = createSupabaseServerClient(request, headers);
+      await supabase.auth.signOut();
+      // 로그아웃 시 쿠키 삭제를 위해 headers를 포함한 리다이렉트
+      return redirect("/login", { headers });
+    }
+  }
+  return { success: false };
 };
 
 export default function MyResume({ loaderData }: Route.ComponentProps) {
   const { resumes } = loaderData;
   const navigate = useNavigate();
+  const fetcher = useFetcher();
+
+  React.useEffect(() => {
+    if (fetcher.data?.success) {
+      navigate("/");
+    }
+  }, [fetcher.data, navigate]);
 
   const handleAddResume = () => {
     navigate("/add-resume");
@@ -45,6 +74,14 @@ export default function MyResume({ loaderData }: Route.ComponentProps) {
     navigate(`/resume/${id}`);
   };
 
+  const handleLogout = () => {
+    fetcher.submit({ intent: "logout" }, { method: "POST" });
+  };
+
+  const handleProfile = () => {
+    navigate("/profile");
+  };
+
   return (
     <div className="min-h-screen bg-gray-900">
       {/* Header */}
@@ -52,13 +89,30 @@ export default function MyResume({ loaderData }: Route.ComponentProps) {
         <div className="container mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
             <h1 className="text-3xl font-bold text-white">나의 이력서</h1>
-            <Button
-              onClick={handleAddResume}
-              className="gap-2 text-white cursor-pointer hover:opacity-90 transition-opacity"
-            >
-              <Plus className="h-4 w-4" />
-              이력서 추가
-            </Button>
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={handleAddResume}
+                className="gap-2 text-white cursor-pointer hover:opacity-90 transition-opacity"
+              >
+                <Plus className="h-4 w-4" />
+                이력서 추가
+              </Button>
+              <Button
+                onClick={handleProfile}
+                variant="outline"
+                className="gap-2 text-white border-gray-600 hover:bg-gray-800 hover:text-white hover:border-gray-500 cursor-pointer transition-all"
+              >
+                <User className="h-4 w-4" />내 정보
+              </Button>
+              <Button
+                onClick={handleLogout}
+                variant="outline"
+                className="gap-2 text-white border-gray-600 hover:bg-gray-800 hover:text-white hover:border-gray-500 cursor-pointer transition-all"
+              >
+                <LogOut className="h-4 w-4" />
+                로그아웃
+              </Button>
+            </div>
           </div>
         </div>
       </div>

@@ -1,5 +1,7 @@
+import * as React from "react";
 import type { Route } from "./+types/login";
-import { Link } from "react-router";
+import { Link, useFetcher, redirect } from "react-router";
+import { z } from "zod";
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
 import {
@@ -9,6 +11,13 @@ import {
   CardHeader,
   CardTitle,
 } from "../../../components/ui/card";
+import { createSupabaseServerClient } from "~/supabase/server";
+
+// 로그인 입력 검증 스키마
+const loginSchema = z.object({
+  email: z.string().email("올바른 이메일 형식이 아닙니다"),
+  password: z.string().min(6, "비밀번호는 최소 6자 이상이어야 합니다"),
+});
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -20,21 +29,154 @@ export function meta({}: Route.MetaArgs) {
   ];
 }
 
+export const action = async ({ request }: Route.ActionArgs) => {
+  if (request.method === "POST") {
+    const formData = await request.formData();
+    const intent = formData.get("intent");
+    const headers = new Headers();
+    const supabase = createSupabaseServerClient(request, headers);
+
+    // 1. 이메일 로그인
+    if (intent === "email-login") {
+      // zod로 입력 검증
+      const result = loginSchema.safeParse({
+        email: formData.get("email"),
+        password: formData.get("password"),
+      });
+
+      if (!result.success) {
+        return {
+          success: false,
+          errors: result.error.flatten().fieldErrors,
+        };
+      }
+
+      const { email, password } = result.data;
+
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (error) {
+          // Supabase 에러 메시지를 사용자 친화적인 메시지로 변환
+          let errorMessage = "로그인에 실패했습니다";
+
+          if (
+            error.message.includes("Invalid login credentials") ||
+            error.message.includes("invalid") ||
+            error.code === "invalid_credentials"
+          ) {
+            errorMessage = "로그인에 실패했습니다";
+          } else {
+            errorMessage = "로그인 중 오류가 발생했습니다";
+          }
+
+          return {
+            success: false,
+            error: errorMessage,
+          };
+        }
+
+        if (data.user) {
+          // 로그인 성공 - headers에 쿠키가 자동으로 설정됨
+          return redirect("/my-resume", { headers });
+        }
+
+        return {
+          success: false,
+          error: "로그인에 실패했습니다",
+        };
+      } catch (error) {
+        console.error("Login error:", error);
+        return {
+          success: false,
+          error: "로그인 중 오류가 발생했습니다",
+        };
+      }
+    }
+
+    // 2. GitHub 로그인 (이메일 블록 밖으로 분리)
+    if (intent === "github-login") {
+      try {
+        const url = new URL(request.url);
+        const origin = url.origin;
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: "github",
+          options: {
+            redirectTo: `${origin}/auth/callback`,
+          },
+        });
+
+        if (error) {
+          return {
+            success: false,
+            error: "GitHub 로그인 중 오류가 발생했습니다",
+          };
+        }
+
+        const redirectUrl = data.url;
+        if (redirectUrl && typeof redirectUrl === "string") {
+          // GitHub OAuth URL로 리다이렉트
+          // 중요: headers를 포함해야 PKCE code verifier가 브라우저 쿠키에 저장됩니다
+          return redirect(redirectUrl, { headers });
+        }
+
+        return {
+          success: false,
+          error: "GitHub 로그인 URL을 생성할 수 없습니다",
+        };
+      } catch (error) {
+        console.error("GitHub login error:", error);
+        return {
+          success: false,
+          error: "GitHub 로그인 중 오류가 발생했습니다",
+        };
+      }
+    }
+  }
+
+  return { success: false };
+};
+
 export default function Login() {
+  const fetcher = useFetcher();
+  const [errors, setErrors] = React.useState<{
+    email?: string[];
+    password?: string[];
+  }>({});
+  const [loginError, setLoginError] = React.useState<string>("");
+
+  React.useEffect(() => {
+    if (fetcher.data) {
+      if (fetcher.data.errors) {
+        setErrors(fetcher.data.errors);
+        setLoginError("");
+      } else if (fetcher.data.error) {
+        setLoginError(fetcher.data.error);
+        setErrors({});
+      }
+    }
+  }, [fetcher.data]);
+
   const handleEmailLogin = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    // TODO: 이메일 로그인 로직 구현
-    console.log("Email login");
-  };
-
-  const handleGoogleLogin = () => {
-    // TODO: Google 로그인 로직 구현
-    console.log("Google login");
+    setErrors({});
+    setLoginError("");
+    const formData = new FormData(e.currentTarget);
+    fetcher.submit(
+      {
+        intent: "email-login",
+        email: formData.get("email") as string,
+        password: formData.get("password") as string,
+      },
+      { method: "POST" }
+    );
   };
 
   const handleGithubLogin = () => {
-    // TODO: GitHub 로그인 로직 구현
-    console.log("GitHub login");
+    fetcher.submit({ intent: "github-login" }, { method: "POST" });
   };
 
   return (
@@ -60,15 +202,55 @@ export default function Login() {
               </label>
               <Input
                 id="email"
+                name="email"
                 type="email"
                 placeholder="name@example.com"
                 required
                 className="bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               />
+              {errors.email && (
+                <p className="text-xs text-red-500 dark:text-red-400">
+                  {errors.email[0]}
+                </p>
+              )}
             </div>
-            <Button type="submit" className="w-full">
-              이메일로 로그인
+            <div className="space-y-2">
+              <label
+                htmlFor="password"
+                className="text-sm font-medium text-gray-900 dark:text-white"
+              >
+                비밀번호
+              </label>
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                placeholder="비밀번호를 입력하세요"
+                required
+                className="bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              />
+              {errors.password && (
+                <p className="text-xs text-red-500 dark:text-red-400">
+                  {errors.password[0]}
+                </p>
+              )}
+            </div>
+            <Button
+              type="submit"
+              className="w-full cursor-pointer"
+              disabled={fetcher.state === "submitting"}
+            >
+              {fetcher.state === "submitting"
+                ? "로그인 중..."
+                : "이메일로 로그인"}
             </Button>
+            {loginError && (
+              <div className="rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-3">
+                <p className="text-sm text-red-800 dark:text-red-200">
+                  {loginError}
+                </p>
+              </div>
+            )}
           </form>
 
           {/* Sign up link */}
@@ -78,7 +260,7 @@ export default function Login() {
             </span>
             <Link
               to="/signup"
-              className="text-primary hover:underline font-medium"
+              className="text-primary hover:underline font-medium cursor-pointer"
             >
               가입하러 가기
             </Link>
@@ -101,37 +283,7 @@ export default function Login() {
             <Button
               type="button"
               variant="outline"
-              className="w-full"
-              onClick={handleGoogleLogin}
-            >
-              <svg
-                className="mr-2 h-4 w-4"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-              >
-                <path
-                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                  fill="#4285F4"
-                />
-                <path
-                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                  fill="#34A853"
-                />
-                <path
-                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                  fill="#FBBC05"
-                />
-                <path
-                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                  fill="#EA4335"
-                />
-              </svg>
-              Google로 계속하기
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
+              className="w-full cursor-pointer"
               onClick={handleGithubLogin}
             >
               <svg
@@ -153,7 +305,7 @@ export default function Login() {
           <div className="text-center text-sm">
             <Link
               to="/"
-              className="text-gray-600 dark:text-gray-400 hover:text-primary underline"
+              className="text-gray-600 dark:text-gray-400 hover:text-primary underline cursor-pointer"
             >
               홈으로 돌아가기
             </Link>
