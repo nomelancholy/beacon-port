@@ -14,8 +14,13 @@ import {
 } from "lucide-react";
 import { Button } from "../../../components/ui/button";
 import { getResumeById } from "../queries";
+import { createSupabaseServerClient } from "~/supabase/server";
+import { cn } from "~/lib/utils";
 
 export function meta({ data }: Route.MetaArgs) {
+  if (!data || !data.resume) {
+    return [{ title: "이력서 상세 - Beacon Port" }];
+  }
   const resumeName = data?.resume?.name || "이력서";
   return [
     { title: `${resumeName} 이력서 상세 - Beacon Port` },
@@ -26,12 +31,14 @@ export function meta({ data }: Route.MetaArgs) {
   ];
 }
 
-export const loader = async ({ params }: Route.LoaderArgs) => {
+export const loader = async ({ params, request }: Route.LoaderArgs) => {
   const resumeId = params.id;
   if (!resumeId) {
     throw new Response("Resume ID is required", { status: 400 });
   }
-  const data = await getResumeById(resumeId);
+  const supabase = createSupabaseServerClient(request);
+  const data = await getResumeById(supabase, resumeId);
+  console.log("resume-detail loader data :>> ", data);
   return data;
 };
 
@@ -124,6 +131,7 @@ const formatPeriod = (
 };
 
 export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
+  if (!loaderData) return null;
   const {
     resume,
     experiences,
@@ -137,6 +145,14 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
   const params = useParams();
   const resumeId = params.id;
   const resumeContentRef = React.useRef<HTMLDivElement>(null);
+  const [isPublic, setIsPublic] = React.useState(false);
+  //   const [isUpdating, setIsUpdating] = React.useState(false);
+
+  //   React.useEffect(() => {
+  //     if (resume) {
+  //       setIsPublic(!!resume.is_public);
+  //     }
+  //   }, [resume]);
 
   // URL 복사 함수
   const handleShare = async () => {
@@ -173,6 +189,24 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
   const handleEdit = () => {
     navigate(`/add-resume?resumeId=${resumeId}`);
   };
+
+  // 공개/비공개 상태 변경 핸들러
+  //   const handlePublicToggle = async (checked: boolean) => {
+  //     if (!resumeId) return;
+
+  //     setIsUpdating(true);
+  //     try {
+  //       await updateResumePublicStatus(resumeId, checked);
+  //       setIsPublic(checked);
+  //     } catch (error) {
+  //       console.error("Failed to update public status:", error);
+  //       alert("공개 상태 변경에 실패했습니다.");
+  //       // 상태 롤백
+  //       setIsPublic(!checked);
+  //     } finally {
+  //       setIsUpdating(false);
+  //     }
+  //   };
 
   if (!resume) {
     return (
@@ -272,7 +306,31 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
               목록으로
             </Button>
             <h1 className="text-2xl font-bold text-white">{resume.title}</h1>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
+              {/* 공개/비공개 스위치 */}
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-gray-600 bg-gray-800/50">
+                <span className="text-sm text-white/80">비공개</span>
+                <button
+                  type="button"
+                  role="switch"
+                  //   aria-checked={isPublic}
+                  //   disabled={isUpdating}
+                  //   onClick={() => handlePublicToggle(!isPublic)}
+                  className={cn(
+                    "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed",
+                    isPublic ? "bg-green-600" : "bg-gray-600"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
+                      isPublic ? "translate-x-6" : "translate-x-1"
+                    )}
+                  />
+                </button>
+                <span className="text-sm text-white/80">공개</span>
+              </div>
+
               <Button
                 variant="outline"
                 onClick={handleEdit}

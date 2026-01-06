@@ -1,11 +1,11 @@
-import db from "~/db";
-import { eq } from "drizzle-orm";
-import { resumes } from "./schema";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "../../../database.types";
 
-import supabaseClient from "~/supa-client";
-
-export const getResumes = async (userId: string) => {
-  const { data, error } = await supabaseClient
+export const getResumes = async (
+  supabase: SupabaseClient<Database>,
+  userId: string
+) => {
+  const { data, error } = await supabase
     .from("resumes")
     .select("*")
     .eq("user_id", userId);
@@ -15,9 +15,12 @@ export const getResumes = async (userId: string) => {
   return data;
 };
 
-export const getResumeById = async (resumeId: string) => {
+export const getResumeById = async (
+  supabase: SupabaseClient<Database>,
+  resumeId: string
+) => {
   // Nested select를 사용하여 이력서와 관련 데이터를 한 번에 가져오기
-  const { data, error } = await supabaseClient
+  const { data, error } = await supabase
     .from("resumes")
     .select(
       `
@@ -75,4 +78,23 @@ export const getResumeById = async (resumeId: string) => {
       (a: any, b: any) => a.display_order - b.display_order
     ),
   };
+};
+
+export const updateResumePublicStatus = async (
+  supabase: SupabaseClient<Database>,
+  resumeId: string,
+  isPublic: boolean
+) => {
+  const { data, error } = await supabase
+    .from("resumes")
+    .update({ is_public: isPublic })
+    .eq("id", resumeId)
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data;
 };

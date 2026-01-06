@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "../../../components/ui/card";
 import { getResumes } from "../queries";
+import { createSupabaseServerClient } from "~/supabase/server";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -22,27 +23,15 @@ export function meta({}: Route.MetaArgs) {
   ];
 }
 
-export const loader = async () => {
-  const resumes = await getResumes("e220c504-2aa2-4360-9ed4-1cc01d2e5daf");
+export const loader = async ({ request }: Route.LoaderArgs) => {
+  const supabase = createSupabaseServerClient(request);
+  const resumes = await getResumes(
+    supabase,
+    "e220c504-2aa2-4360-9ed4-1cc01d2e5daf"
+  );
   console.log("resumes :>> ", resumes);
   return { resumes };
 };
-
-// 임시 데이터 (나중에 실제 데이터로 교체)
-const mockResumes = [
-  {
-    id: 1,
-    title: "프론트엔드 개발자 이력서",
-    updatedAt: "2024-01-15",
-    status: "공개",
-  },
-  {
-    id: 2,
-    title: "풀스택 개발자 이력서",
-    updatedAt: "2024-01-10",
-    status: "비공개",
-  },
-];
 
 export default function MyResume({ loaderData }: Route.ComponentProps) {
   const { resumes } = loaderData;
@@ -76,7 +65,7 @@ export default function MyResume({ loaderData }: Route.ComponentProps) {
 
       {/* Content */}
       <div className="container mx-auto px-4 py-8">
-        {mockResumes.length === 0 ? (
+        {resumes.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16">
             <p className="mb-4 text-lg text-white/90">
               등록된 이력서가 없습니다
@@ -118,7 +107,7 @@ export default function MyResume({ loaderData }: Route.ComponentProps) {
                           : "bg-gray-700 text-gray-300"
                       }`}
                     >
-                      {resume.isPublic ? "공개" : "비공개"}
+                      {resume.is_public ? "공개" : "비공개"}
                     </span>
                   </div>
                 </CardHeader>
