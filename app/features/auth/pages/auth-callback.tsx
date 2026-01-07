@@ -3,6 +3,7 @@ import type { Route } from "./+types/auth-callback";
 import { useLoaderData, useNavigate } from "react-router";
 import { createSupabaseServerClient } from "~/supabase/server";
 import { redirect } from "react-router";
+import { Loader2 } from "lucide-react";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -69,7 +70,7 @@ export default function AuthCallback() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-900">
-      <div className="text-center">
+      <div className="text-center space-y-4">
         {loaderData && "error" in loaderData && loaderData.error ? (
           <>
             <p className="text-white text-xl mb-4">
@@ -80,7 +81,13 @@ export default function AuthCallback() {
             </p>
           </>
         ) : (
-          <p className="text-white text-xl">인증 중...</p>
+          <>
+            <Loader2 className="h-8 w-8 animate-spin text-white mx-auto" />
+            <p className="text-white text-xl">인증 중...</p>
+            <p className="text-white/70 text-sm">
+              잠시만 기다려주세요
+            </p>
+          </>
         )}
       </div>
     </div>
