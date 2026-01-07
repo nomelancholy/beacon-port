@@ -167,9 +167,24 @@ export default function Login() {
   // fetcher.state가 변경될 때도 로딩 상태 업데이트
   React.useEffect(() => {
     if (fetcher.state === "idle" && fetcher.data?.error) {
-      setIsGithubLoading(false);
+      // GitHub 로그인 에러인 경우에만 로딩 상태 해제
+      const formData = fetcher.formData as FormData | undefined;
+      if (formData) {
+        const intent = formData.get("intent");
+        if (intent === "github-login") {
+          setIsGithubLoading(false);
+        }
+      }
     }
-  }, [fetcher.state, fetcher.data]);
+  }, [fetcher.state, fetcher.data, fetcher.formData]);
+
+  // 현재 제출 중인 intent 확인
+  const formData = fetcher.formData as FormData | undefined;
+  const currentIntent = formData ? formData.get("intent") : null;
+  const isEmailLoggingIn =
+    fetcher.state === "submitting" && currentIntent === "email-login";
+  const isGithubLoggingIn =
+    fetcher.state === "submitting" && currentIntent === "github-login";
 
   const handleEmailLogin = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -251,11 +266,9 @@ export default function Login() {
             <Button
               type="submit"
               className="w-full cursor-pointer"
-              disabled={fetcher.state === "submitting"}
+              disabled={isEmailLoggingIn}
             >
-              {fetcher.state === "submitting"
-                ? "로그인 중..."
-                : "이메일로 로그인"}
+              {isEmailLoggingIn ? "로그인 중..." : "이메일로 로그인"}
             </Button>
             {loginError && (
               <div className="rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-3">
@@ -298,9 +311,9 @@ export default function Login() {
               variant="outline"
               className="w-full cursor-pointer"
               onClick={handleGithubLogin}
-              disabled={isGithubLoading || fetcher.state === "submitting"}
+              disabled={isGithubLoading || isGithubLoggingIn}
             >
-              {isGithubLoading || fetcher.state === "submitting" ? (
+              {isGithubLoading || isGithubLoggingIn ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   GitHub 로그인 중...

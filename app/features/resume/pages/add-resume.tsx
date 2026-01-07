@@ -3,6 +3,7 @@ import type { Route } from "./+types/add-resume";
 import { useNavigate, useFetcher } from "react-router";
 import { createSupabaseServerClient } from "~/supabase/server";
 import { redirect } from "react-router";
+import { getResumeById } from "../queries";
 import {
   ChevronDown,
   Github,
@@ -74,15 +75,54 @@ import imageCompression from "browser-image-compression";
 import { Loader2 } from "lucide-react";
 import { useToast, Toast } from "../../../components/ui/toast";
 
-export function meta({}: Route.MetaArgs) {
+export function meta({ data }: Route.MetaArgs) {
+  const isEditMode = !!data?.resume;
   return [
-    { title: "이력서 추가 - Beacon Port" },
+    {
+      title: isEditMode
+        ? `이력서 수정 - ${data.resume.title} - Beacon Port`
+        : "이력서 추가 - Beacon Port",
+    },
     {
       name: "description",
-      content: "새로운 이력서를 작성하세요",
+      content: isEditMode
+        ? "이력서를 수정하세요"
+        : "새로운 이력서를 작성하세요",
     },
   ];
 }
+
+export const loader = async ({ request }: Route.LoaderArgs) => {
+  const url = new URL(request.url);
+  const resumeId = url.searchParams.get("resumeId");
+
+  if (!resumeId) {
+    return { resume: null };
+  }
+
+  const supabase = createSupabaseServerClient(request);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Response("Unauthorized", { status: 401 });
+  }
+
+  try {
+    const data = await getResumeById(supabase, resumeId);
+
+    // 소유자 확인
+    if (data.resume.user_id !== user.id) {
+      throw new Response("Forbidden", { status: 403 });
+    }
+
+    return data;
+  } catch (error) {
+    console.error("Error loading resume:", error);
+    throw new Response("이력서를 불러올 수 없습니다", { status: 404 });
+  }
+};
 
 export const action = async ({ request }: Route.ActionArgs) => {
   if (request.method === "POST") {
@@ -96,6 +136,8 @@ export const action = async ({ request }: Route.ActionArgs) => {
       throw new Response("Unauthorized", { status: 401 });
     }
 
+    const url = new URL(request.url);
+    const resumeIdParam = url.searchParams.get("resumeId");
     const formData = await request.formData();
     const intent = formData.get("intent");
 
@@ -109,10 +151,13 @@ export const action = async ({ request }: Route.ActionArgs) => {
         };
       }
 
-      // 사진 업로드 처리 (base64가 있으면 Storage에 업로드)
+      // 사진 업로드 처리 (base64가 있으면 Storage에 업로드, 기존 URL이면 그대로 사용)
       let photoUrl: string | null = null;
       const photoBase64 = formData.get("사진") as string;
-      if (photoBase64 && photoBase64.startsWith("data:image/")) {
+      // 기존 URL인 경우 (http:// 또는 https://로 시작)
+      if (photoBase64 && photoBase64.startsWith("http")) {
+        photoUrl = photoBase64;
+      } else if (photoBase64 && photoBase64.startsWith("data:image/")) {
         try {
           // base64에서 데이터 추출
           const base64Data = photoBase64.split(",")[1];
@@ -191,21 +236,83 @@ export const action = async ({ request }: Route.ActionArgs) => {
         };
       }
 
-      const { data: resume, error: resumeError } = await supabase
-        .from("resumes")
-        .insert(resumeData)
-        .select()
-        .single();
+      let resumeId: string;
 
-      if (resumeError) {
-        console.error("Resume creation error:", resumeError);
-        return {
-          success: false,
-          error: resumeError.message,
-        };
+      // 수정 모드인 경우
+      if (resumeIdParam) {
+        // 소유자 확인
+        const { data: existingResume, error: checkError } = await supabase
+          .from("resumes")
+          .select("user_id")
+          .eq("id", resumeIdParam)
+          .single();
+
+        if (checkError || !existingResume) {
+          return {
+            success: false,
+            error: "이력서를 찾을 수 없습니다.",
+          };
+        }
+
+        if (existingResume.user_id !== user.id) {
+          return {
+            success: false,
+            error: "이력서를 수정할 권한이 없습니다.",
+          };
+        }
+
+        // 기존 데이터 업데이트
+        const { data: updatedResume, error: updateError } = await supabase
+          .from("resumes")
+          .update({
+            ...resumeData,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", resumeIdParam)
+          .select()
+          .single();
+
+        if (updateError) {
+          console.error("Resume update error:", updateError);
+          return {
+            success: false,
+            error: updateError.message,
+          };
+        }
+
+        resumeId = updatedResume.id;
+
+        // 기존 관련 데이터 삭제 (새로 추가할 데이터로 대체)
+        await supabase.from("experiences").delete().eq("resume_id", resumeId);
+        await supabase.from("side_projects").delete().eq("resume_id", resumeId);
+        await supabase.from("educations").delete().eq("resume_id", resumeId);
+        await supabase
+          .from("certifications")
+          .delete()
+          .eq("resume_id", resumeId);
+        await supabase
+          .from("language_tests")
+          .delete()
+          .eq("resume_id", resumeId);
+        await supabase.from("etcs").delete().eq("resume_id", resumeId);
+      } else {
+        // 새로 생성
+        const { data: resume, error: resumeError } = await supabase
+          .from("resumes")
+          .insert(resumeData)
+          .select()
+          .single();
+
+        if (resumeError) {
+          console.error("Resume creation error:", resumeError);
+          return {
+            success: false,
+            error: resumeError.message,
+          };
+        }
+
+        resumeId = resume.id;
       }
-
-      const resumeId = resume.id;
 
       // 동적 항목들 저장
       // 1. Experiences
@@ -1899,10 +2006,11 @@ const DraggableCard = React.memo(
   }
 );
 
-export default function AddResume() {
+export default function AddResume({ loaderData }: Route.ComponentProps) {
   const navigate = useNavigate();
   const fetcher = useFetcher();
   const { toast, showToast, hideToast } = useToast();
+  const isEditMode = !!loaderData?.resume;
 
   // About Me 하위 항목들을 기본값으로 모두 선택
   const getInitialSelectedFields = () => {
@@ -1913,13 +2021,222 @@ export default function AddResume() {
     return fields;
   };
 
+  // 기존 데이터로 초기화
+  const initializeFromLoaderData = () => {
+    if (!loaderData?.resume) {
+      return {
+        selectedFields: getInitialSelectedFields(),
+        formData: {} as Record<string, string>,
+        dynamicItems: {
+          Experience: [],
+          "Side Project": [],
+          Education: [],
+          자격증: [],
+          어학성적: [],
+          "그 외 활동": [],
+        },
+        resumeTitle: "",
+      };
+    }
+
+    const resume = loaderData.resume;
+    const formData: Record<string, string> = {};
+    const selectedFields: Record<string, boolean> = {};
+    const dynamicItems: Record<string, string[]> = {
+      Experience: [],
+      "Side Project": [],
+      Education: [],
+      자격증: [],
+      어학성적: [],
+      "그 외 활동": [],
+    };
+
+    // About Me 필드 채우기
+    if (resume.photo) {
+      formData["사진"] = resume.photo;
+      selectedFields["사진"] = true;
+    }
+    if (resume.name) {
+      formData["이름"] = resume.name;
+      selectedFields["이름"] = true;
+    }
+    if (resume.role) {
+      formData["Role"] = resume.role;
+      selectedFields["Role"] = true;
+    }
+    if (resume.email) {
+      formData["이메일"] = resume.email;
+      selectedFields["이메일"] = true;
+    }
+    if (resume.phone) {
+      formData["전화번호"] = resume.phone;
+      selectedFields["전화번호"] = true;
+    }
+    if (resume.english_level) {
+      formData["영어 구사 능력"] = resume.english_level;
+      selectedFields["영어 구사 능력"] = true;
+    }
+    if (resume.blog) {
+      formData["블로그"] = resume.blog;
+      selectedFields["블로그"] = true;
+    }
+    if (resume.linkedin) {
+      formData["LinkedIn"] = resume.linkedin;
+      selectedFields["LinkedIn"] = true;
+    }
+    if (resume.instagram) {
+      formData["Instagram"] = resume.instagram;
+      selectedFields["Instagram"] = true;
+    }
+    if (resume.facebook) {
+      formData["Facebook"] = resume.facebook;
+      selectedFields["Facebook"] = true;
+    }
+    if (resume.github) {
+      formData["Github"] = resume.github;
+      selectedFields["Github"] = true;
+    }
+    if (resume.youtube) {
+      formData["Youtube"] = resume.youtube;
+      selectedFields["Youtube"] = true;
+    }
+    if (resume.x) {
+      formData["X"] = resume.x;
+      selectedFields["X"] = true;
+    }
+    if (resume.introduce) {
+      formData["Introduce"] = resume.introduce;
+      selectedFields["Introduce"] = true;
+    }
+
+    // Experiences
+    if (loaderData.experiences && loaderData.experiences.length > 0) {
+      selectedFields["Experience"] = true;
+      loaderData.experiences.forEach((exp: any, index: number) => {
+        const itemId = `Experience_${exp.id}`;
+        dynamicItems.Experience.push(itemId);
+        selectedFields[itemId] = true;
+        formData[`${itemId}_회사명`] = exp.company || "";
+        formData[`${itemId}_Role`] = exp.role || "";
+        formData[`${itemId}_시작일`] = exp.start_date
+          ? new Date(exp.start_date).toISOString().slice(0, 7)
+          : "";
+        formData[`${itemId}_종료일`] = exp.end_date
+          ? new Date(exp.end_date).toISOString().slice(0, 7)
+          : "";
+        formData[`${itemId}_작업내용`] = exp.description || "";
+        if (exp.skills && exp.skills.length > 0) {
+          formData[`${itemId}_스킬`] = exp.skills
+            .map((s: any) => s.name)
+            .join(", ");
+        }
+      });
+    }
+
+    // Side Projects
+    if (loaderData.sideProjects && loaderData.sideProjects.length > 0) {
+      selectedFields["Side Project"] = true;
+      loaderData.sideProjects.forEach((sp: any, index: number) => {
+        const itemId = `Side Project_${sp.id}`;
+        dynamicItems["Side Project"].push(itemId);
+        selectedFields[itemId] = true;
+        formData[`${itemId}_프로젝트명`] = sp.name || "";
+        formData[`${itemId}_시작일`] = sp.start_date
+          ? new Date(sp.start_date).toISOString().slice(0, 7)
+          : "";
+        formData[`${itemId}_종료일`] = sp.end_date
+          ? new Date(sp.end_date).toISOString().slice(0, 7)
+          : "";
+        formData[`${itemId}_주요작업`] = sp.description || "";
+        if (sp.skills && sp.skills.length > 0) {
+          formData[`${itemId}_기술스택`] = sp.skills
+            .map((s: any) => s.name)
+            .join(", ");
+        }
+      });
+    }
+
+    // Educations
+    if (loaderData.educations && loaderData.educations.length > 0) {
+      selectedFields["Education"] = true;
+      loaderData.educations.forEach((edu: any, index: number) => {
+        const itemId = `Education_${edu.id}`;
+        dynamicItems.Education.push(itemId);
+        selectedFields[itemId] = true;
+        formData[`${itemId}_기관명`] = edu.institution || "";
+        formData[`${itemId}_전공`] = edu.major || "";
+        formData[`${itemId}_시작일`] = edu.start_date
+          ? new Date(edu.start_date).toISOString().slice(0, 7)
+          : "";
+        formData[`${itemId}_종료일`] = edu.end_date
+          ? new Date(edu.end_date).toISOString().slice(0, 7)
+          : "";
+        formData[`${itemId}_내용`] = edu.description || "";
+      });
+    }
+
+    // Certifications
+    if (loaderData.certifications && loaderData.certifications.length > 0) {
+      selectedFields["자격증"] = true;
+      loaderData.certifications.forEach((cert: any, index: number) => {
+        const itemId = `자격증_${cert.id}`;
+        dynamicItems.자격증.push(itemId);
+        selectedFields[itemId] = true;
+        formData[`${itemId}_자격증명`] = cert.name || "";
+        formData[`${itemId}_발급기관`] = cert.issuer || "";
+        formData[`${itemId}_취득일`] = cert.acquisition_date
+          ? new Date(cert.acquisition_date).toISOString().slice(0, 7)
+          : "";
+      });
+    }
+
+    // Language Tests
+    if (loaderData.languageTests && loaderData.languageTests.length > 0) {
+      selectedFields["어학성적"] = true;
+      loaderData.languageTests.forEach((test: any, index: number) => {
+        const itemId = `어학성적_${test.id}`;
+        dynamicItems.어학성적.push(itemId);
+        selectedFields[itemId] = true;
+        formData[`${itemId}_시험명`] = test.name || "";
+        formData[`${itemId}_점수`] = test.score || "";
+        formData[`${itemId}_응시일자`] = test.test_date
+          ? new Date(test.test_date).toISOString().slice(0, 7)
+          : "";
+      });
+    }
+
+    // Etcs
+    if (loaderData.etcs && loaderData.etcs.length > 0) {
+      selectedFields["그 외 활동"] = true;
+      loaderData.etcs.forEach((etc: any, index: number) => {
+        const itemId = `그 외 활동_${etc.id}`;
+        dynamicItems["그 외 활동"].push(itemId);
+        selectedFields[itemId] = true;
+        formData[`${itemId}_활동명`] = etc.name || "";
+        formData[`${itemId}_링크`] = etc.link || "";
+        formData[`${itemId}_내용`] = etc.description || "";
+      });
+    }
+
+    return {
+      selectedFields,
+      formData,
+      dynamicItems,
+      resumeTitle: resume.title || "",
+    };
+  };
+
+  const initialData = React.useMemo(initializeFromLoaderData, [loaderData]);
+
   const [selectedFields, setSelectedFields] = React.useState<
     Record<string, boolean>
-  >(getInitialSelectedFields);
-  const [formData, setFormData] = React.useState<Record<string, string>>({});
+  >(initialData.selectedFields);
+  const [formData, setFormData] = React.useState<Record<string, string>>(
+    initialData.formData
+  );
   const [isPreviewMode, setIsPreviewMode] = React.useState(false);
   const [showTitleDialog, setShowTitleDialog] = React.useState(false);
-  const [resumeTitle, setResumeTitle] = React.useState("");
+  const [resumeTitle, setResumeTitle] = React.useState(initialData.resumeTitle);
   const [isUploadingPhoto, setIsUploadingPhoto] = React.useState(false);
   const [openCategories, setOpenCategories] = React.useState<
     Record<string, boolean>
@@ -1941,14 +2258,7 @@ export default function AddResume() {
   // 동적 항목 관리 (Experience, Side Project 등)
   const [dynamicItems, setDynamicItems] = React.useState<
     Record<string, string[]>
-  >({
-    Experience: [],
-    "Side Project": [],
-    Education: [],
-    자격증: [],
-    어학성적: [],
-    "그 외 활동": [],
-  });
+  >(initialData.dynamicItems);
 
   // 동적 항목 추가
   const handleAddDynamicItem = (category: string) => {
@@ -2079,7 +2389,15 @@ export default function AddResume() {
       formDataToSubmit.append(key, value);
     });
 
-    fetcher.submit(formDataToSubmit, { method: "POST" });
+    // 수정 모드인 경우 resumeId를 URL에 포함
+    const url = isEditMode
+      ? `/add-resume?resumeId=${loaderData?.resume?.id}`
+      : "/add-resume";
+
+    fetcher.submit(formDataToSubmit, {
+      method: "POST",
+      action: url,
+    });
     setShowTitleDialog(false);
     setResumeTitle("");
   };
@@ -3078,119 +3396,6 @@ export default function AddResume() {
           );
         })()}
 
-        {/* 자격증 섹션 */}
-        {(() => {
-          const certificationFields = dynamicItems["자격증"].filter(
-            (field) => selectedFields[field]
-          );
-
-          if (certificationFields.length === 0) return null;
-
-          return (
-            <section className="mb-10">
-              <hr className="border-gray-300 dark:border-gray-600 mb-4" />
-              <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
-                자격증
-              </h2>
-              {certificationFields.map((field) => {
-                const certificationName = formData[`${field}_자격증명`];
-                const issuer = formData[`${field}_발급기관`];
-                const acquisitionDate = formData[`${field}_취득일`];
-
-                // 취득일 포맷팅
-                const formatAcquisitionDate = () => {
-                  if (!acquisitionDate) return null;
-                  const [year, month] = acquisitionDate.split("-");
-                  return `${year}년 ${parseInt(month)}월`;
-                };
-
-                const acquisitionDateFormatted = formatAcquisitionDate();
-
-                return (
-                  <div key={field} className="mb-10">
-                    <hr className="border-gray-300 dark:border-gray-600 mb-6" />
-                    <h3
-                      className={`text-2xl font-bold mb-2 ${!certificationName ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-900 dark:text-gray-100"}`}
-                    >
-                      {getDisplayValue("자격증명", certificationName)}
-                    </h3>
-                    <div
-                      className={`mb-2 ${!issuer ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
-                    >
-                      {getDisplayValue("발급기관", issuer)}
-                    </div>
-                    <div
-                      className={`mb-2 ${!acquisitionDateFormatted ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
-                    >
-                      {acquisitionDateFormatted || getPlaceholder("취득일")}
-                    </div>
-                  </div>
-                );
-              })}
-            </section>
-          );
-        })()}
-
-        {/* 어학 성적 섹션 */}
-        {(() => {
-          const languageTestFields = dynamicItems["어학성적"].filter(
-            (field) => selectedFields[field]
-          );
-
-          if (languageTestFields.length === 0) return null;
-
-          return (
-            <section className="mb-10">
-              <hr className="border-gray-300 dark:border-gray-600 mb-4" />
-              <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
-                어학 성적
-              </h2>
-              {languageTestFields.map((field) => {
-                const testName = formData[`${field}_시험명`];
-                const score = formData[`${field}_점수`];
-                const testDate = formData[`${field}_응시일자`];
-
-                // 응시 일자 포맷팅
-                const formatTestDate = () => {
-                  if (!testDate) return null;
-                  const [year, month] = testDate.split("-");
-                  return `${year}년 ${parseInt(month)}월`;
-                };
-
-                const testDateFormatted = formatTestDate();
-
-                return (
-                  <div key={field} className="mb-10">
-                    <hr className="border-gray-300 dark:border-gray-600 mb-6" />
-                    <h3
-                      className={`text-2xl font-bold mb-2 ${!testName ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-900 dark:text-gray-100"}`}
-                    >
-                      {getDisplayValue("시험명", testName)}
-                    </h3>
-                    <div className="mb-2">
-                      <span
-                        className={`text-lg ${!score ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
-                      >
-                        {getDisplayValue("점수", score)}
-                      </span>
-                      {testDateFormatted && (
-                        <span className="text-gray-700 dark:text-gray-300 ml-4">
-                          ({testDateFormatted})
-                        </span>
-                      )}
-                      {!testDateFormatted && (
-                        <span className="text-gray-400 dark:text-gray-500 italic ml-4">
-                          ({getPlaceholder("응시일자")})
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </section>
-          );
-        })()}
-
         {/* 다른 섹션들도 여기에 추가 가능 */}
         {Object.entries(resumeCategories)
           .filter(
@@ -3774,7 +3979,7 @@ export default function AddResume() {
                 variant="outline"
                 onClick={() => {
                   setShowTitleDialog(false);
-                  setResumeTitle("");
+                  setResumeTitle(initialData.resumeTitle);
                 }}
                 className="cursor-pointer"
               >

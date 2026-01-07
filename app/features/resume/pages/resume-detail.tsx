@@ -1,6 +1,6 @@
 import * as React from "react";
 import type { Route } from "./+types/resume-detail";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams, useFetcher } from "react-router";
 import {
   ArrowLeft,
   Github,
@@ -18,6 +18,8 @@ import { Badge } from "../../../components/ui/badge";
 import { getResumeById } from "../queries";
 import { createSupabaseServerClient } from "~/supabase/server";
 import { cn } from "~/lib/utils";
+import { useToast, Toast } from "../../../components/ui/toast";
+import { Loader2 } from "lucide-react";
 
 export function meta({ data }: Route.MetaArgs) {
   if (!data || !data.resume) {
@@ -42,6 +44,77 @@ export const loader = async ({ params, request }: Route.LoaderArgs) => {
   const data = await getResumeById(supabase, resumeId);
   console.log("resume-detail loader data :>> ", data);
   return data;
+};
+
+export const action = async ({ params, request }: Route.ActionArgs) => {
+  if (request.method === "POST") {
+    const headers = new Headers();
+    const supabase = createSupabaseServerClient(request, headers);
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      throw new Response("Unauthorized", { status: 401 });
+    }
+
+    const resumeId = params.id;
+    if (!resumeId) {
+      return {
+        success: false,
+        error: "이력서 ID가 필요합니다.",
+      };
+    }
+
+    const formData = await request.formData();
+    const intent = formData.get("intent");
+
+    if (intent === "toggle-public") {
+      const isPublic = formData.get("isPublic") === "true";
+
+      // 이력서 소유자 확인
+      const { data: resume, error: resumeError } = await supabase
+        .from("resumes")
+        .select("user_id")
+        .eq("id", resumeId)
+        .single();
+
+      if (resumeError || !resume) {
+        return {
+          success: false,
+          error: "이력서를 찾을 수 없습니다.",
+        };
+      }
+
+      if (resume.user_id !== user.id) {
+        return {
+          success: false,
+          error: "이력서를 수정할 권한이 없습니다.",
+        };
+      }
+
+      // 공개 상태 업데이트
+      const { error: updateError } = await supabase
+        .from("resumes")
+        .update({ is_public: isPublic })
+        .eq("id", resumeId);
+
+      if (updateError) {
+        console.error("Update public status error:", updateError);
+        return {
+          success: false,
+          error: "공개 상태 변경에 실패했습니다.",
+        };
+      }
+
+      return {
+        success: true,
+        isPublic,
+      };
+    }
+  }
+
+  return { success: false };
 };
 
 // 필드별 placeholder 텍스트 정의
@@ -147,14 +220,35 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
   const params = useParams();
   const resumeId = params.id;
   const resumeContentRef = React.useRef<HTMLDivElement>(null);
-  const [isPublic, setIsPublic] = React.useState(false);
-  //   const [isUpdating, setIsUpdating] = React.useState(false);
+  const fetcher = useFetcher();
+  const { toast, showToast, hideToast } = useToast();
+  const [isPublic, setIsPublic] = React.useState(!!resume?.is_public);
 
-  //   React.useEffect(() => {
-  //     if (resume) {
-  //       setIsPublic(!!resume.is_public);
-  //     }
-  //   }, [resume]);
+  // 초기 상태 설정
+  React.useEffect(() => {
+    if (resume) {
+      setIsPublic(!!resume.is_public);
+    }
+  }, [resume]);
+
+  // fetcher 결과 처리
+  React.useEffect(() => {
+    if (fetcher.data) {
+      if (fetcher.data.success) {
+        setIsPublic(fetcher.data.isPublic);
+        showToast(
+          fetcher.data.isPublic
+            ? "이력서가 공개되었습니다."
+            : "이력서가 비공개로 설정되었습니다.",
+          "success"
+        );
+      } else if (fetcher.data.error) {
+        showToast(fetcher.data.error, "error");
+        // 에러 발생 시 상태 롤백
+        setIsPublic(!!resume?.is_public);
+      }
+    }
+  }, [fetcher.data, showToast, resume]);
 
   // URL 복사 함수
   const handleShare = async () => {
@@ -193,22 +287,18 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
   };
 
   // 공개/비공개 상태 변경 핸들러
-  //   const handlePublicToggle = async (checked: boolean) => {
-  //     if (!resumeId) return;
+  const handlePublicToggle = (checked: boolean) => {
+    if (!resumeId) return;
 
-  //     setIsUpdating(true);
-  //     try {
-  //       await updateResumePublicStatus(resumeId, checked);
-  //       setIsPublic(checked);
-  //     } catch (error) {
-  //       console.error("Failed to update public status:", error);
-  //       alert("공개 상태 변경에 실패했습니다.");
-  //       // 상태 롤백
-  //       setIsPublic(!checked);
-  //     } finally {
-  //       setIsUpdating(false);
-  //     }
-  //   };
+    const formData = new FormData();
+    formData.append("intent", "toggle-public");
+    formData.append("isPublic", checked.toString());
+
+    // 낙관적 업데이트
+    setIsPublic(checked);
+
+    fetcher.submit(formData, { method: "POST" });
+  };
 
   if (!resume) {
     return (
@@ -329,20 +419,24 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
                 <button
                   type="button"
                   role="switch"
-                  //   aria-checked={isPublic}
-                  //   disabled={isUpdating}
-                  //   onClick={() => handlePublicToggle(!isPublic)}
+                  aria-checked={isPublic}
+                  disabled={fetcher.state === "submitting"}
+                  onClick={() => handlePublicToggle(!isPublic)}
                   className={cn(
-                    "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed",
+                    "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer",
                     isPublic ? "bg-green-600" : "bg-gray-600"
                   )}
                 >
-                  <span
-                    className={cn(
-                      "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
-                      isPublic ? "translate-x-6" : "translate-x-1"
-                    )}
-                  />
+                  {fetcher.state === "submitting" ? (
+                    <Loader2 className="absolute left-1 h-4 w-4 animate-spin text-white" />
+                  ) : (
+                    <span
+                      className={cn(
+                        "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
+                        isPublic ? "translate-x-6" : "translate-x-1"
+                      )}
+                    />
+                  )}
                 </button>
                 <span className="text-sm text-white/80">공개</span>
               </div>
@@ -747,6 +841,9 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
           )}
         </div>
       </div>
+      {toast && (
+        <Toast message={toast.message} type={toast.type} onClose={hideToast} />
+      )}
     </div>
   );
 }
