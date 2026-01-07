@@ -22,6 +22,20 @@
       "when": 1767758753827,
       "tag": "0002_ancient_moira_mactaggert",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1767771255931,
+      "tag": "0003_spotty_taskmaster",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1767771384414,
+      "tag": "0004_tiny_mystique",
+      "breakpoints": true
     }
   ]
 }

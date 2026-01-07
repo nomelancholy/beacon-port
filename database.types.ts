@@ -260,6 +260,7 @@ export type Database = {
       }
       resumes: {
         Row: {
+          blog: string | null
           created_at: string
           email: string | null
           english_level: Database["public"]["Enums"]["english_level"] | null
@@ -276,10 +277,11 @@ export type Database = {
           title: string
           updated_at: string
           user_id: string | null
-          website: string | null
+          x: string | null
           youtube: string | null
         }
         Insert: {
+          blog?: string | null
           created_at?: string
           email?: string | null
           english_level?: Database["public"]["Enums"]["english_level"] | null
@@ -296,10 +298,11 @@ export type Database = {
           title: string
           updated_at?: string
           user_id?: string | null
-          website?: string | null
+          x?: string | null
           youtube?: string | null
         }
         Update: {
+          blog?: string | null
           created_at?: string
           email?: string | null
           english_level?: Database["public"]["Enums"]["english_level"] | null
@@ -316,7 +319,7 @@ export type Database = {
           title?: string
           updated_at?: string
           user_id?: string | null
-          website?: string | null
+          x?: string | null
           youtube?: string | null
         }
         Relationships: [

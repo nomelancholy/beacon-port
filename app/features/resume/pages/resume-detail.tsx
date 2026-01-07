@@ -8,11 +8,13 @@ import {
   Linkedin,
   Instagram,
   Facebook,
+  X,
   Edit,
   Share2,
   Printer,
 } from "lucide-react";
 import { Button } from "../../../components/ui/button";
+import { Badge } from "../../../components/ui/badge";
 import { getResumeById } from "../queries";
 import { createSupabaseServerClient } from "~/supabase/server";
 import { cn } from "~/lib/utils";
@@ -51,7 +53,7 @@ const getPlaceholder = (field: string): string => {
     이메일: "이메일을 입력하세요",
     전화번호: "전화번호를 입력하세요",
     "영어 구사 능력": "수준을 선택하세요",
-    웹사이트: "웹사이트를 입력하세요",
+    블로그: "블로그를 입력하세요",
     Introduce: "자기소개를 입력하세요",
     회사명: "회사명을 입력하세요",
     프로젝트명: "프로젝트명을 입력하세요",
@@ -221,6 +223,15 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
     );
   }
 
+  // URL에 프로토콜이 없으면 자동으로 https:// 추가
+  const normalizeUrl = (url: string | null | undefined): string => {
+    if (!url || url === "#") return "#";
+    // 이미 프로토콜이 있으면 그대로 반환
+    if (/^https?:\/\//i.test(url)) return url;
+    // 프로토콜이 없으면 https:// 추가
+    return `https://${url}`;
+  };
+
   // 소셜 미디어 링크
   const socialLinks = [
     {
@@ -248,6 +259,11 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
       icon: Youtube,
       url: resume.youtube,
     },
+    {
+      key: "X",
+      icon: X,
+      url: resume.x,
+    },
   ].filter((item) => item.url);
 
   // 연락처 정보
@@ -260,11 +276,11 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
       href: resume.email ? `mailto:${resume.email}` : "#",
     },
     {
-      key: "웹사이트",
-      label: "Web",
-      value: resume.website,
+      key: "블로그",
+      label: "Blog",
+      value: resume.blog,
       isLink: true,
-      href: resume.website || "#",
+      href: normalizeUrl(resume.blog),
     },
     {
       key: "전화번호",
@@ -391,7 +407,7 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
                   {socialLinks.map(({ key, icon: Icon, url }) => (
                     <a
                       key={key}
-                      href={url || "#"}
+                      href={normalizeUrl(url)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="w-10 h-10 rounded-full flex items-center justify-center text-white transition-colors bg-gray-800 dark:bg-gray-700 hover:bg-gray-700 dark:hover:bg-gray-600"
@@ -499,6 +515,23 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
                         </span>
                       )}
                     </div>
+                    {exp.skills && exp.skills.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        {exp.skills.map((skill: any, idx: number) => {
+                          const variants = [
+                            "default",
+                            "secondary",
+                            "outline",
+                          ] as const;
+                          const variant = variants[idx % variants.length];
+                          return (
+                            <Badge key={skill.id || idx} variant={variant}>
+                              {skill.name}
+                            </Badge>
+                          );
+                        })}
+                      </div>
+                    )}
                     {exp.description && (
                       <div className="text-base leading-relaxed whitespace-pre-line mb-4 text-gray-700 dark:text-gray-300">
                         {exp.description}
@@ -536,6 +569,23 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
                     ) : (
                       <div className="mb-2 text-gray-400 dark:text-gray-500 italic">
                         {getPlaceholder("시작일")} – {getPlaceholder("종료일")}
+                      </div>
+                    )}
+                    {project.skills && project.skills.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        {project.skills.map((skill: any, idx: number) => {
+                          const variants = [
+                            "default",
+                            "secondary",
+                            "outline",
+                          ] as const;
+                          const variant = variants[idx % variants.length];
+                          return (
+                            <Badge key={skill.id || idx} variant={variant}>
+                              {skill.name}
+                            </Badge>
+                          );
+                        })}
                       </div>
                     )}
                     {project.description && (
@@ -652,12 +702,12 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
             </section>
           )}
 
-          {/* etc 섹션 */}
+          {/* 그 외 활동 섹션 */}
           {etcs.length > 0 && (
             <section className="mb-10">
               <hr className="border-gray-300 dark:border-gray-600 mb-4" />
               <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
-                etc
+                그 외 활동
               </h2>
               {etcs.map((etc: any) => (
                 <div key={etc.id} className="mb-10">

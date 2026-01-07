@@ -67,6 +67,9 @@ import {
   DialogDescription,
   DialogClose,
 } from "../../../components/ui/dialog";
+import { Badge } from "../../../components/ui/badge";
+import { createBrowserClient } from "@supabase/ssr";
+import type { Database } from "../../../../database.types";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -110,12 +113,13 @@ export const action = async ({ request }: Route.ActionArgs) => {
         role: (formData.get("Role") as string) || null,
         phone: (formData.get("전화번호") as string) || null,
         email: (formData.get("이메일") as string) || null,
-        website: (formData.get("웹사이트") as string) || null,
+        blog: (formData.get("블로그") as string) || null,
         linkedin: (formData.get("LinkedIn") as string) || null,
         instagram: (formData.get("Instagram") as string) || null,
         facebook: (formData.get("Facebook") as string) || null,
         github: (formData.get("Github") as string) || null,
         youtube: (formData.get("Youtube") as string) || null,
+        x: (formData.get("X") as string) || null,
         introduce: (formData.get("Introduce") as string) || null,
         english_level:
           (formData.get("영어 구사 능력") as
@@ -134,22 +138,443 @@ export const action = async ({ request }: Route.ActionArgs) => {
         };
       }
 
-      const { data, error } = await supabase
+      const { data: resume, error: resumeError } = await supabase
         .from("resumes")
         .insert(resumeData)
         .select()
         .single();
 
-      if (error) {
-        console.error("Resume creation error:", error);
+      if (resumeError) {
+        console.error("Resume creation error:", resumeError);
         return {
           success: false,
-          error: error.message,
+          error: resumeError.message,
         };
       }
 
+      const resumeId = resume.id;
+
+      // 동적 항목들 저장
+      // 1. Experiences
+      const experienceKeys = Array.from(formData.keys()).filter((key) =>
+        key.startsWith("Experience_")
+      );
+      const experienceItemIds = [
+        ...new Set(
+          experienceKeys.map((key) => {
+            const parts = key.split("_");
+            return parts[0] + "_" + parts[1]; // "Experience_xxx"
+          })
+        ),
+      ];
+      if (experienceItemIds.length > 0) {
+        const experiencesData = experienceItemIds
+          .map((itemId, index) => {
+            const company = formData.get(`${itemId}_회사명`) as string;
+            const role = formData.get(`${itemId}_Role`) as string;
+            const startDate = formData.get(`${itemId}_시작일`) as string;
+            const endDate = formData.get(`${itemId}_종료일`) as string;
+            const description = formData.get(`${itemId}_작업내용`) as string;
+            const skills = formData.get(`${itemId}_스킬`) as string;
+
+            if (!company || !role || !startDate) return null;
+
+            return {
+              resume_id: resumeId,
+              company,
+              role,
+              start_date: new Date(startDate + "-01").toISOString(),
+              end_date: endDate
+                ? new Date(endDate + "-01").toISOString()
+                : null,
+              description: description || null,
+              display_order: index,
+              skills: skills || "", // 기술 스택은 별도로 저장
+            };
+          })
+          .filter((item) => item !== null);
+
+        if (experiencesData.length > 0) {
+          const { data: insertedExperiences, error: expError } = await supabase
+            .from("experiences")
+            .insert(experiencesData.map(({ skills, ...rest }) => rest))
+            .select("id");
+
+          if (expError) {
+            console.error("Experiences insert error:", expError);
+          } else if (insertedExperiences) {
+            // 기술 스택 저장
+            for (let i = 0; i < experiencesData.length; i++) {
+              const experience = experiencesData[i];
+              const insertedExp = insertedExperiences[i];
+              if (!insertedExp || !experience.skills) continue;
+
+              const skillNames = experience.skills
+                .split(",")
+                .map((s) => s.trim())
+                .filter((s) => s.length > 0);
+
+              for (const skillName of skillNames) {
+                // skill 찾기 또는 생성
+                const { data: existingSkill } = await supabase
+                  .from("skills")
+                  .select("id")
+                  .ilike("name", skillName)
+                  .limit(1)
+                  .single();
+
+                let skillId = existingSkill?.id;
+
+                if (!skillId) {
+                  const { data: newSkill, error: skillError } = await supabase
+                    .from("skills")
+                    .insert({ name: skillName, is_verified: false })
+                    .select("id")
+                    .single();
+
+                  if (skillError) {
+                    if (skillError.code === "23505") {
+                      // 중복 에러인 경우 다시 검색
+                      const { data: retrySkill } = await supabase
+                        .from("skills")
+                        .select("id")
+                        .ilike("name", skillName)
+                        .limit(1)
+                        .single();
+                      skillId = retrySkill?.id;
+                    } else {
+                      console.error("Skill creation error:", skillError);
+                      continue;
+                    }
+                  } else {
+                    skillId = newSkill?.id;
+                  }
+                }
+
+                if (skillId) {
+                  // experience_skills에 저장
+                  try {
+                    const { error: skillInsertError } = await supabase
+                      .from("experience_skills")
+                      .insert({
+                        experience_id: insertedExp.id,
+                        skill_id: skillId,
+                      });
+                    // 중복 에러는 무시
+                    if (skillInsertError && skillInsertError.code !== "23505") {
+                      console.error(
+                        "Experience skill insert error:",
+                        skillInsertError
+                      );
+                    }
+                  } catch (err: any) {
+                    // 중복 에러는 무시
+                    if (err?.code !== "23505") {
+                      console.error("Experience skill insert error:", err);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // 2. Side Projects
+      const sideProjectKeys = Array.from(formData.keys()).filter((key) =>
+        key.startsWith("Side Project_")
+      );
+      const sideProjectItemIds = [
+        ...new Set(
+          sideProjectKeys.map((key) => {
+            // "Side Project_xxx_프로젝트명" -> "Side Project_xxx"
+            const match = key.match(/^(Side Project_[^_]+)/);
+            return match ? match[1] : null;
+          })
+        ),
+      ].filter((id) => id !== null) as string[];
+      if (sideProjectItemIds.length > 0) {
+        const sideProjectsData = sideProjectItemIds
+          .map((itemId, index) => {
+            const name = formData.get(`${itemId}_프로젝트명`) as string;
+            const startDate = formData.get(`${itemId}_시작일`) as string;
+            const endDate = formData.get(`${itemId}_종료일`) as string;
+            const description = formData.get(`${itemId}_주요작업`) as string;
+            const techStack = formData.get(`${itemId}_기술스택`) as string;
+
+            if (!name || !startDate) return null;
+
+            return {
+              resume_id: resumeId,
+              name,
+              start_date: new Date(startDate + "-01").toISOString(),
+              end_date: endDate
+                ? new Date(endDate + "-01").toISOString()
+                : null,
+              description: description || null,
+              display_order: index,
+              techStack: techStack || "", // 기술 스택은 별도로 저장
+            };
+          })
+          .filter((item) => item !== null);
+
+        if (sideProjectsData.length > 0) {
+          const { data: insertedSideProjects, error: spError } = await supabase
+            .from("side_projects")
+            .insert(sideProjectsData.map(({ techStack, ...rest }) => rest))
+            .select("id");
+
+          if (spError) {
+            console.error("Side projects insert error:", spError);
+          } else if (insertedSideProjects) {
+            // 기술 스택 저장
+            for (let i = 0; i < sideProjectsData.length; i++) {
+              const sideProject = sideProjectsData[i];
+              const insertedSP = insertedSideProjects[i];
+              if (!insertedSP || !sideProject.techStack) continue;
+
+              const skillNames = sideProject.techStack
+                .split(",")
+                .map((s) => s.trim())
+                .filter((s) => s.length > 0);
+
+              for (const skillName of skillNames) {
+                // skill 찾기 또는 생성
+                const { data: existingSkill } = await supabase
+                  .from("skills")
+                  .select("id")
+                  .ilike("name", skillName)
+                  .limit(1)
+                  .single();
+
+                let skillId = existingSkill?.id;
+
+                if (!skillId) {
+                  const { data: newSkill, error: skillError } = await supabase
+                    .from("skills")
+                    .insert({ name: skillName, is_verified: false })
+                    .select("id")
+                    .single();
+
+                  if (skillError) {
+                    if (skillError.code === "23505") {
+                      // 중복 에러인 경우 다시 검색
+                      const { data: retrySkill } = await supabase
+                        .from("skills")
+                        .select("id")
+                        .ilike("name", skillName)
+                        .limit(1)
+                        .single();
+                      skillId = retrySkill?.id;
+                    } else {
+                      console.error("Skill creation error:", skillError);
+                      continue;
+                    }
+                  } else {
+                    skillId = newSkill?.id;
+                  }
+                }
+
+                if (skillId) {
+                  // side_project_skills에 저장
+                  try {
+                    const { error: skillInsertError } = await supabase
+                      .from("side_project_skills")
+                      .insert({
+                        side_project_id: insertedSP.id,
+                        skill_id: skillId,
+                      });
+                    // 중복 에러는 무시
+                    if (skillInsertError && skillInsertError.code !== "23505") {
+                      console.error(
+                        "Side project skill insert error:",
+                        skillInsertError
+                      );
+                    }
+                  } catch (err: any) {
+                    // 중복 에러는 무시
+                    if (err?.code !== "23505") {
+                      console.error("Side project skill insert error:", err);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // 3. Educations
+      const educationKeys = Array.from(formData.keys()).filter((key) =>
+        key.startsWith("Education_")
+      );
+      const educationItemIds = [
+        ...new Set(
+          educationKeys.map((key) => {
+            const parts = key.split("_");
+            return parts[0] + "_" + parts[1]; // "Education_xxx"
+          })
+        ),
+      ];
+      if (educationItemIds.length > 0) {
+        const educationsData = educationItemIds
+          .map((itemId, index) => {
+            const institution = formData.get(`${itemId}_기관명`) as string;
+            const major = formData.get(`${itemId}_전공`) as string;
+            const startDate = formData.get(`${itemId}_시작일`) as string;
+            const endDate = formData.get(`${itemId}_종료일`) as string;
+            const description = formData.get(`${itemId}_내용`) as string;
+
+            if (!institution || !startDate) return null;
+
+            return {
+              resume_id: resumeId,
+              institution,
+              major: major || null,
+              start_date: new Date(startDate + "-01").toISOString(),
+              end_date: endDate
+                ? new Date(endDate + "-01").toISOString()
+                : null,
+              description: description || null,
+              display_order: index,
+            };
+          })
+          .filter((item) => item !== null);
+
+        if (educationsData.length > 0) {
+          const { error: eduError } = await supabase
+            .from("educations")
+            .insert(educationsData);
+          if (eduError) {
+            console.error("Educations insert error:", eduError);
+          }
+        }
+      }
+
+      // 4. Certifications (자격증)
+      const certificationKeys = Array.from(formData.keys()).filter((key) =>
+        key.startsWith("자격증_")
+      );
+      const certificationItemIds = [
+        ...new Set(
+          certificationKeys.map(
+            (key) => key.split("_")[0] + "_" + key.split("_")[1]
+          )
+        ),
+      ];
+      if (certificationItemIds.length > 0) {
+        const certificationsData = certificationItemIds
+          .map((itemId, index) => {
+            const name = formData.get(`${itemId}_자격증명`) as string;
+            const issuer = formData.get(`${itemId}_발급기관`) as string;
+            const acquisitionDate = formData.get(`${itemId}_취득일`) as string;
+
+            if (!name || !issuer || !acquisitionDate) return null;
+
+            return {
+              resume_id: resumeId,
+              name,
+              issuer,
+              acquisition_date: new Date(acquisitionDate + "-01").toISOString(),
+              display_order: index,
+            };
+          })
+          .filter((item) => item !== null);
+
+        if (certificationsData.length > 0) {
+          const { error: certError } = await supabase
+            .from("certifications")
+            .insert(certificationsData);
+          if (certError) {
+            console.error("Certifications insert error:", certError);
+          }
+        }
+      }
+
+      // 5. Language Tests (어학성적)
+      const languageTestKeys = Array.from(formData.keys()).filter((key) =>
+        key.startsWith("어학성적_")
+      );
+      const languageTestItemIds = [
+        ...new Set(
+          languageTestKeys.map(
+            (key) => key.split("_")[0] + "_" + key.split("_")[1]
+          )
+        ),
+      ];
+      if (languageTestItemIds.length > 0) {
+        const languageTestsData = languageTestItemIds
+          .map((itemId, index) => {
+            const name = formData.get(`${itemId}_시험명`) as string;
+            const score = formData.get(`${itemId}_점수`) as string;
+            const testDate = formData.get(`${itemId}_응시일자`) as string;
+
+            if (!name || !score || !testDate) return null;
+
+            return {
+              resume_id: resumeId,
+              name,
+              score,
+              test_date: new Date(testDate + "-01").toISOString(),
+              display_order: index,
+            };
+          })
+          .filter((item) => item !== null);
+
+        if (languageTestsData.length > 0) {
+          const { error: langError } = await supabase
+            .from("language_tests")
+            .insert(languageTestsData);
+          if (langError) {
+            console.error("Language tests insert error:", langError);
+          }
+        }
+      }
+
+      // 6. Etcs (그 외 활동)
+      const etcKeys = Array.from(formData.keys()).filter((key) =>
+        key.startsWith("그 외 활동_")
+      );
+      const etcItemIds = [
+        ...new Set(
+          etcKeys.map((key) => {
+            // "그 외 활동_xxx_활동명" -> "그 외 활동_xxx"
+            const match = key.match(/^(그 외 활동_[^_]+)/);
+            return match ? match[1] : null;
+          })
+        ),
+      ].filter((id) => id !== null) as string[];
+      if (etcItemIds.length > 0) {
+        const etcsData = etcItemIds
+          .map((itemId, index) => {
+            const name = formData.get(`${itemId}_활동명`) as string;
+            const link = formData.get(`${itemId}_링크`) as string;
+            const description = formData.get(`${itemId}_내용`) as string;
+
+            if (!name) return null;
+
+            return {
+              resume_id: resumeId,
+              name,
+              link: link || null,
+              description: description || null,
+              display_order: index,
+            };
+          })
+          .filter((item) => item !== null);
+
+        if (etcsData.length > 0) {
+          const { error: etcError } = await supabase
+            .from("etcs")
+            .insert(etcsData);
+          if (etcError) {
+            console.error("Etcs insert error:", etcError);
+          }
+        }
+      }
+
       // 저장 성공 시 이력서 상세 페이지로 리다이렉트
-      return redirect(`/resume/${data.id}`, { headers });
+      return redirect(`/resume/${resumeId}`, { headers });
     }
   }
 
@@ -165,21 +590,286 @@ const resumeCategories = {
     "이메일",
     "전화번호",
     "영어 구사 능력",
-    "웹사이트",
+    "블로그",
     "LinkedIn",
     "Instagram",
     "Facebook",
     "Github",
     "Youtube",
+    "X",
     "Introduce",
   ],
   Experience: [],
   "Side Project": [],
+  "스킬 스택 그래프": [],
   Education: [],
   자격증: [],
   어학성적: [],
-  etc: [],
+  "그 외 활동": [],
 };
+
+// 기술 스택 입력 컴포넌트 (자동완성 기능 포함)
+const SkillInput = React.memo(
+  ({
+    itemId,
+    value,
+    onInputChange,
+    fieldName,
+  }: {
+    itemId: string;
+    value: string;
+    onInputChange: (field: string, value: string) => void;
+    fieldName: string;
+  }) => {
+    const [inputValue, setInputValue] = React.useState("");
+    const [suggestions, setSuggestions] = React.useState<
+      { id: string; name: string }[]
+    >([]);
+    const [selectedSkills, setSelectedSkills] = React.useState<string[]>([]);
+    const [showSuggestions, setShowSuggestions] = React.useState(false);
+    const inputRef = React.useRef<HTMLInputElement>(null);
+    const suggestionsRef = React.useRef<HTMLDivElement>(null);
+
+    // 초기값 설정
+    React.useEffect(() => {
+      if (value) {
+        const skills = value
+          .split(",")
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0);
+        setSelectedSkills(skills);
+      }
+    }, [value]);
+
+    // 외부 클릭 감지
+    React.useEffect(() => {
+      const handleClickOutside = (event: MouseEvent) => {
+        if (
+          suggestionsRef.current &&
+          !suggestionsRef.current.contains(event.target as Node) &&
+          inputRef.current &&
+          !inputRef.current.contains(event.target as Node)
+        ) {
+          setShowSuggestions(false);
+        }
+      };
+
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => {
+        document.removeEventListener("mousedown", handleClickOutside);
+      };
+    }, []);
+
+    // Supabase 클라이언트 생성 (클라이언트 사이드에서만)
+    const getSupabaseClient = React.useCallback(() => {
+      if (typeof window === "undefined") return null;
+
+      const url = import.meta.env.VITE_SUPABASE_URL;
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+      if (!url || !anonKey) {
+        console.warn("Missing Supabase environment variables");
+        return null;
+      }
+
+      return createBrowserClient<Database>(url, anonKey);
+    }, []);
+
+    // 기술 검색 (debounce)
+    React.useEffect(() => {
+      if (!inputValue.trim()) {
+        setSuggestions([]);
+        setShowSuggestions(false);
+        return;
+      }
+
+      const client = getSupabaseClient();
+      if (!client) {
+        setSuggestions([]);
+        return;
+      }
+
+      const timeoutId = setTimeout(async () => {
+        try {
+          const { data, error } = await client
+            .from("skills")
+            .select("id, name")
+            .ilike("name", `%${inputValue.trim()}%`)
+            .limit(10);
+
+          if (error) {
+            console.error("Skills search error:", error);
+            setSuggestions([]);
+          } else {
+            setSuggestions(data || []);
+            setShowSuggestions(true);
+          }
+        } catch (error) {
+          console.error("Skills search error:", error);
+          setSuggestions([]);
+        }
+      }, 300);
+
+      return () => clearTimeout(timeoutId);
+    }, [inputValue, getSupabaseClient]);
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const newValue = e.target.value;
+      setInputValue(newValue);
+
+      // 쉼표 입력 시 현재 입력값을 기술로 추가
+      if (newValue.endsWith(",")) {
+        const skillToAdd = newValue.slice(0, -1).trim();
+        if (skillToAdd && !selectedSkills.includes(skillToAdd)) {
+          addSkill(skillToAdd);
+        }
+        setInputValue("");
+      }
+    };
+
+    const addSkill = async (skillName: string) => {
+      if (!skillName.trim() || selectedSkills.includes(skillName.trim())) {
+        return;
+      }
+
+      const trimmedSkill = skillName.trim();
+      const client = getSupabaseClient();
+
+      // 선택된 기술 목록에 추가 (클라이언트가 없어도 UI는 업데이트)
+      const newSkills = [...selectedSkills, trimmedSkill];
+      setSelectedSkills(newSkills);
+      onInputChange(fieldName, newSkills.join(", "));
+      setInputValue("");
+      setShowSuggestions(false);
+
+      // skills 테이블에서 찾거나 생성 (클라이언트가 있을 때만)
+      if (!client) {
+        console.warn(
+          "Supabase client not available, skill not saved to database"
+        );
+        return;
+      }
+
+      try {
+        // 먼저 기존 skill 찾기
+        const { data: existingSkill } = await client
+          .from("skills")
+          .select("id, name")
+          .ilike("name", trimmedSkill)
+          .limit(1)
+          .single();
+
+        // 없으면 새로 생성
+        if (!existingSkill) {
+          const { error } = await client
+            .from("skills")
+            .insert({ name: trimmedSkill, is_verified: false })
+            .select("id, name")
+            .single();
+
+          if (error) {
+            // 중복 에러는 무시 (이미 존재하는 경우)
+            if (error.code !== "23505") {
+              console.error("Skill creation error:", error);
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error adding skill to database:", error);
+        // 에러가 나도 UI는 이미 업데이트됨
+      }
+    };
+
+    const removeSkill = (skillToRemove: string) => {
+      const newSkills = selectedSkills.filter((s) => s !== skillToRemove);
+      setSelectedSkills(newSkills);
+      onInputChange(fieldName, newSkills.join(", "));
+    };
+
+    const handleSuggestionClick = (suggestion: {
+      id: string;
+      name: string;
+    }) => {
+      addSkill(suggestion.name);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Enter" && inputValue.trim()) {
+        e.preventDefault();
+        addSkill(inputValue.trim());
+      } else if (e.key === "Backspace") {
+        const target = e.currentTarget;
+        // 입력 필드가 완전히 비어있고, 커서가 맨 앞에 있을 때만 마지막 뱃지 삭제
+        // 입력 중에 백스페이스를 눌러서 텍스트를 지우는 경우와 구분
+        if (
+          inputValue === "" &&
+          target.selectionStart === 0 &&
+          target.selectionEnd === 0 &&
+          selectedSkills.length > 0
+        ) {
+          e.preventDefault();
+          removeSkill(selectedSkills[selectedSkills.length - 1]);
+        }
+      }
+    };
+
+    return (
+      <div className="relative">
+        <Input
+          ref={inputRef}
+          id={fieldName}
+          name={fieldName}
+          value={inputValue}
+          onChange={handleInputChange}
+          onKeyDown={handleKeyDown}
+          onFocus={() => {
+            if (suggestions.length > 0) {
+              setShowSuggestions(true);
+            }
+          }}
+          placeholder="예: Python, Flask, AWS (쉼표로 구분)"
+          className="w-full"
+        />
+        {showSuggestions && suggestions.length > 0 && (
+          <div
+            ref={suggestionsRef}
+            className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-auto"
+          >
+            {suggestions.map((suggestion) => (
+              <button
+                key={suggestion.id}
+                type="button"
+                onClick={() => handleSuggestionClick(suggestion)}
+                className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-colors"
+              >
+                {suggestion.name}
+              </button>
+            ))}
+          </div>
+        )}
+        {selectedSkills.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-3">
+            {selectedSkills.map((skill, idx) => {
+              const variants = ["default", "secondary", "outline"] as const;
+              const variant = variants[idx % variants.length];
+              return (
+                <Badge
+                  key={idx}
+                  variant={variant}
+                  className="cursor-pointer"
+                  onClick={() => removeSkill(skill)}
+                >
+                  {skill}
+                  <X className="h-3 w-3 ml-1 inline" />
+                </Badge>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+);
 
 // Experience 카드 컴포넌트 (통합 컴포넌트 - 외부 선언)
 const ExperienceCard = React.memo(
@@ -321,14 +1011,11 @@ const ExperienceCard = React.memo(
               >
                 기술 스택
               </label>
-              <Input
-                id={`${itemId}_스킬`}
-                name={`${itemId}_스킬`}
+              <SkillInput
+                itemId={itemId}
                 value={formData[`${itemId}_스킬`] || ""}
-                onChange={(e) =>
-                  onInputChange(`${itemId}_스킬`, e.target.value)
-                }
-                placeholder="예: Python, Flask, AWS, Swift (쉼표로 구분)"
+                onInputChange={onInputChange}
+                fieldName={`${itemId}_스킬`}
               />
             </div>
             <div>
@@ -494,14 +1181,11 @@ const SideProjectCard = React.memo(
               >
                 기술 스택
               </label>
-              <Input
-                id={`${itemId}_기술스택`}
-                name={`${itemId}_기술스택`}
+              <SkillInput
+                itemId={itemId}
                 value={formData[`${itemId}_기술스택`] || ""}
-                onChange={(e) =>
-                  onInputChange(`${itemId}_기술스택`, e.target.value)
-                }
-                placeholder="예: React, TypeScript, Node.js (쉼표로 구분)"
+                onInputChange={onInputChange}
+                fieldName={`${itemId}_기술스택`}
               />
             </div>
             <div>
@@ -1197,7 +1881,7 @@ export default function AddResume() {
     Education: [],
     자격증: [],
     어학성적: [],
-    etc: [],
+    "그 외 활동": [],
   });
 
   // 동적 항목 추가
@@ -1370,7 +2054,7 @@ export default function AddResume() {
     const isDynamicEducation = field.startsWith("Education_");
     const isDynamicCertification = field.startsWith("자격증_");
     const isDynamicLanguageTest = field.startsWith("어학성적_");
-    const isDynamicEtc = field.startsWith("etc_");
+    const isDynamicEtc = field.startsWith("그 외 활동_");
 
     // 상위 카테고리 체크 여부 확인 - 상위가 체크 해제되면 하위 항목도 숨김
     if (isDynamicExperience && !selectedFields["Experience"]) return null;
@@ -1378,7 +2062,7 @@ export default function AddResume() {
     if (isDynamicEducation && !selectedFields["Education"]) return null;
     if (isDynamicCertification && !selectedFields["자격증"]) return null;
     if (isDynamicLanguageTest && !selectedFields["어학성적"]) return null;
-    if (isDynamicEtc && !selectedFields["etc"]) return null;
+    if (isDynamicEtc && !selectedFields["그 외 활동"]) return null;
 
     // Experience 경력 필드인지 확인 (구버전 호환)
     const isExperienceField = field.startsWith("경력");
@@ -1491,6 +2175,15 @@ export default function AddResume() {
   };
 
   const renderPreview = () => {
+    // URL에 프로토콜이 없으면 자동으로 https:// 추가
+    const normalizeUrl = (url: string | undefined): string => {
+      if (!url || url === "#") return "#";
+      // 이미 프로토콜이 있으면 그대로 반환
+      if (/^https?:\/\//i.test(url)) return url;
+      // 프로토콜이 없으면 https:// 추가
+      return `https://${url}`;
+    };
+
     // 필드별 placeholder 텍스트 정의
     const getPlaceholder = (field: string): string => {
       const placeholders: Record<string, string> = {
@@ -1500,7 +2193,7 @@ export default function AddResume() {
         이메일: "이메일을 입력하세요",
         전화번호: "전화번호를 입력하세요",
         "영어 구사 능력": "수준을 선택하세요",
-        웹사이트: "웹사이트를 입력하세요",
+        블로그: "블로그를 입력하세요",
         Introduce: "자기소개를 입력하세요",
         회사명: "회사명을 입력하세요",
         프로젝트명: "프로젝트명을 입력하세요",
@@ -1565,6 +2258,12 @@ export default function AddResume() {
         url: formData["Youtube"],
         selected: selectedFields["Youtube"],
       },
+      {
+        key: "X",
+        icon: X,
+        url: formData["X"],
+        selected: selectedFields["X"],
+      },
     ].filter((item) => item.selected);
 
     // 연락처 정보 (Email, Web, Phone) - 선택된 것만
@@ -1578,12 +2277,12 @@ export default function AddResume() {
         selected: selectedFields["이메일"],
       },
       {
-        key: "웹사이트",
-        label: "Web",
-        value: formData["웹사이트"],
+        key: "블로그",
+        label: "Blog",
+        value: formData["블로그"],
         isLink: true,
-        href: formData["웹사이트"] || "#",
-        selected: selectedFields["웹사이트"],
+        href: normalizeUrl(formData["블로그"]),
+        selected: selectedFields["블로그"],
       },
       {
         key: "전화번호",
@@ -1641,7 +2340,7 @@ export default function AddResume() {
                 {socialLinks.map(({ key, icon: Icon, url }) => (
                   <a
                     key={key}
-                    href={url || "#"}
+                    href={normalizeUrl(url)}
                     target={url ? "_blank" : undefined}
                     rel={url ? "noopener noreferrer" : undefined}
                     className={`w-10 h-10 rounded-full flex items-center justify-center text-white transition-colors ${
@@ -1855,12 +2554,27 @@ export default function AddResume() {
                         </span>
                       )}
                     </div>
-                    <div
-                      className={`text-sm mb-2 italic ${!skills ? "text-gray-400 dark:text-gray-500" : "text-gray-600 dark:text-gray-400"}`}
-                    >
-                      <span className="font-medium">주 사용 기술:</span>{" "}
-                      {getDisplayValue("스킬", skills)}
-                    </div>
+                    {skills && (
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        {skills
+                          .split(",")
+                          .map((skill) => skill.trim())
+                          .filter((skill) => skill.length > 0)
+                          .map((skill, idx) => {
+                            const variants = [
+                              "default",
+                              "secondary",
+                              "outline",
+                            ] as const;
+                            const variant = variants[idx % variants.length];
+                            return (
+                              <Badge key={idx} variant={variant}>
+                                {skill}
+                              </Badge>
+                            );
+                          })}
+                      </div>
+                    )}
                     <div
                       className={`text-base leading-relaxed whitespace-pre-line mb-4 ${!description ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
                     >
@@ -1953,12 +2667,27 @@ export default function AddResume() {
                         {getPlaceholder("시작일")} – {getPlaceholder("종료일")}
                       </div>
                     )}
-                    <div
-                      className={`text-sm mb-2 italic ${!techStack ? "text-gray-400 dark:text-gray-500" : "text-gray-600 dark:text-gray-400"}`}
-                    >
-                      <span className="font-medium">기술 스택:</span>{" "}
-                      {getDisplayValue("기술스택", techStack)}
-                    </div>
+                    {techStack && (
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        {techStack
+                          .split(",")
+                          .map((skill) => skill.trim())
+                          .filter((skill) => skill.length > 0)
+                          .map((skill, idx) => {
+                            const variants = [
+                              "default",
+                              "secondary",
+                              "outline",
+                            ] as const;
+                            const variant = variants[idx % variants.length];
+                            return (
+                              <Badge key={idx} variant={variant}>
+                                {skill}
+                              </Badge>
+                            );
+                          })}
+                      </div>
+                    )}
                     <div
                       className={`text-base leading-relaxed whitespace-pre-line mb-4 ${!description ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
                     >
@@ -2068,9 +2797,122 @@ export default function AddResume() {
           );
         })()}
 
-        {/* etc 섹션 */}
+        {/* 자격증 섹션 */}
         {(() => {
-          const etcFields = dynamicItems["etc"].filter(
+          const certificationFields = dynamicItems["자격증"].filter(
+            (field) => selectedFields[field]
+          );
+
+          if (certificationFields.length === 0) return null;
+
+          return (
+            <section className="mb-10">
+              <hr className="border-gray-300 dark:border-gray-600 mb-4" />
+              <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
+                자격증
+              </h2>
+              {certificationFields.map((field) => {
+                const certificationName = formData[`${field}_자격증명`];
+                const issuer = formData[`${field}_발급기관`];
+                const acquisitionDate = formData[`${field}_취득일`];
+
+                // 취득일 포맷팅
+                const formatAcquisitionDate = () => {
+                  if (!acquisitionDate) return null;
+                  const [year, month] = acquisitionDate.split("-");
+                  return `${year}년 ${parseInt(month)}월`;
+                };
+
+                const acquisitionDateFormatted = formatAcquisitionDate();
+
+                return (
+                  <div key={field} className="mb-10">
+                    <hr className="border-gray-300 dark:border-gray-600 mb-6" />
+                    <h3
+                      className={`text-2xl font-bold mb-2 ${!certificationName ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-900 dark:text-gray-100"}`}
+                    >
+                      {getDisplayValue("자격증명", certificationName)}
+                    </h3>
+                    <div
+                      className={`mb-2 ${!issuer ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
+                    >
+                      {getDisplayValue("발급기관", issuer)}
+                    </div>
+                    <div
+                      className={`mb-2 ${!acquisitionDateFormatted ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
+                    >
+                      {acquisitionDateFormatted || getPlaceholder("취득일")}
+                    </div>
+                  </div>
+                );
+              })}
+            </section>
+          );
+        })()}
+
+        {/* 어학 성적 섹션 */}
+        {(() => {
+          const languageTestFields = dynamicItems["어학성적"].filter(
+            (field) => selectedFields[field]
+          );
+
+          if (languageTestFields.length === 0) return null;
+
+          return (
+            <section className="mb-10">
+              <hr className="border-gray-300 dark:border-gray-600 mb-4" />
+              <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
+                어학 성적
+              </h2>
+              {languageTestFields.map((field) => {
+                const testName = formData[`${field}_시험명`];
+                const score = formData[`${field}_점수`];
+                const testDate = formData[`${field}_응시일자`];
+
+                // 응시 일자 포맷팅
+                const formatTestDate = () => {
+                  if (!testDate) return null;
+                  const [year, month] = testDate.split("-");
+                  return `${year}년 ${parseInt(month)}월`;
+                };
+
+                const testDateFormatted = formatTestDate();
+
+                return (
+                  <div key={field} className="mb-10">
+                    <hr className="border-gray-300 dark:border-gray-600 mb-6" />
+                    <h3
+                      className={`text-2xl font-bold mb-2 ${!testName ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-900 dark:text-gray-100"}`}
+                    >
+                      {getDisplayValue("시험명", testName)}
+                    </h3>
+                    <div className="mb-2">
+                      <span
+                        className={`text-lg ${!score ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
+                      >
+                        {getDisplayValue("점수", score)}
+                      </span>
+                      {testDateFormatted && (
+                        <span className="text-gray-700 dark:text-gray-300 ml-4">
+                          ({testDateFormatted})
+                        </span>
+                      )}
+                      {!testDateFormatted && (
+                        <span className="text-gray-400 dark:text-gray-500 italic ml-4">
+                          ({getPlaceholder("응시일자")})
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </section>
+          );
+        })()}
+
+        {/* 그 외 활동 섹션 */}
+        {(() => {
+          const etcFields = dynamicItems["그 외 활동"].filter(
             (field) => selectedFields[field]
           );
 
@@ -2080,7 +2922,7 @@ export default function AddResume() {
             <section className="mb-10">
               <hr className="border-gray-300 dark:border-gray-600 mb-4" />
               <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
-                etc
+                그 외 활동
               </h2>
               {etcFields.map((field) => {
                 const activityName = formData[`${field}_활동명`];
@@ -2241,7 +3083,7 @@ export default function AddResume() {
               category !== "Education" &&
               category !== "자격증" &&
               category !== "어학성적" &&
-              category !== "etc"
+              category !== "그 외 활동"
           )
           .map(([category]) => {
             const categoryFields = resumeCategories[
@@ -2293,15 +3135,38 @@ export default function AddResume() {
                   "Education",
                   "자격증",
                   "어학성적",
-                  "etc",
+                  "그 외 활동",
                 ].includes(category);
+                const isSkillGraphCategory = category === "스킬 스택 그래프";
                 const displayItems = isDynamicCategory
                   ? dynamicItems[category]
                   : items;
 
                 return (
                   <SidebarGroup key={category}>
-                    {isDynamicCategory ? (
+                    {isSkillGraphCategory ? (
+                      // 스킬 스택 그래프 (체크박스만)
+                      <div className="px-2">
+                        <div className="flex items-center justify-between px-2 py-2">
+                          <label
+                            htmlFor={`category-${category}`}
+                            className="flex-1 cursor-pointer text-xs font-medium"
+                            style={{
+                              color: "hsl(var(--sidebar-foreground) / 0.7)",
+                            }}
+                          >
+                            {category}
+                          </label>
+                          <Checkbox
+                            id={`category-${category}`}
+                            checked={selectedFields[category] || false}
+                            onCheckedChange={() =>
+                              handleCheckboxChange(category)
+                            }
+                          />
+                        </div>
+                      </div>
+                    ) : isDynamicCategory ? (
                       // 동적 카테고리 (체크박스만)
                       <div className="px-2">
                         <div className="flex items-center justify-between px-2 py-2">
@@ -2355,7 +3220,9 @@ export default function AddResume() {
                                                 ? `자격증 ${index + 1}`
                                                 : category === "어학성적"
                                                   ? `어학 성적 ${index + 1}`
-                                                  : `항목 ${index + 1}`}
+                                                  : category === "그 외 활동"
+                                                    ? `활동 ${index + 1}`
+                                                    : `항목 ${index + 1}`}
                                       </label>
                                       <Button
                                         type="button"
@@ -2468,22 +3335,21 @@ export default function AddResume() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => navigate("/my-resume")}
+                  onClick={() => {
+                    if (isPreviewMode) {
+                      setIsPreviewMode(false);
+                    } else {
+                      navigate("/my-resume");
+                    }
+                  }}
                   className="group text-gray-700 hover:text-gray-900 hover:bg-gray-100 transition-all duration-200 ease-in-out cursor-pointer"
                 >
                   <ArrowLeft className="h-4 w-4 transition-transform duration-200 group-hover:-translate-x-1" />
                 </Button>
-                <h1 className="text-xl font-semibold">이력서 작성</h1>
+                <h1 className="text-xl font-semibold">
+                  {isPreviewMode ? "이력서 미리보기" : "이력서 작성"}
+                </h1>
               </div>
-              {isPreviewMode && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsPreviewMode(false)}
-                >
-                  편집 모드로 돌아가기
-                </Button>
-              )}
             </div>
 
             <div className="flex-1 overflow-auto p-6 bg-white">
@@ -2661,7 +3527,7 @@ export default function AddResume() {
                               );
                             }
 
-                            if (category === "etc") {
+                            if (category === "그 외 활동") {
                               return (
                                 <SortableContext
                                   key={category}
