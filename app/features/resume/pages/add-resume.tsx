@@ -74,6 +74,20 @@ import type { Database } from "../../../../database.types";
 import imageCompression from "browser-image-compression";
 import { Loader2 } from "lucide-react";
 import { useToast, Toast } from "../../../components/ui/toast";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  LabelList,
+  XAxis,
+  YAxis,
+} from "recharts";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "../../../components/ui/chart";
 
 export function meta({ data }: Route.MetaArgs) {
   const isEditMode = !!data?.resume;
@@ -372,20 +386,41 @@ export const action = async ({ request }: Route.ActionArgs) => {
               const skillNames = experience.skills
                 .split(",")
                 .map((s) => s.trim())
-                .filter((s) => s.length > 0);
+                .filter((s) => s.length > 0)
+                .map((s) => s.replace(/[A-Z]/g, (char) => char.toLowerCase())); // 영어만 소문자로 변환
 
               for (const skillName of skillNames) {
-                // skill 찾기 또는 생성
-                const { data: existingSkill } = await supabase
-                  .from("skills")
-                  .select("id")
-                  .ilike("name", skillName)
+                console.log(
+                  `[Experience] Processing skill: "${skillName}" for experience ${insertedExp.id}`
+                );
+
+                // 1. skills_alias 테이블에서만 alias로 검색
+                const { data: skillAlias, error: aliasError } = await supabase
+                  .from("skill_aliases")
+                  .select("skill_id")
+                  .ilike("alias", skillName)
                   .limit(1)
-                  .single();
+                  .maybeSingle();
 
-                let skillId = existingSkill?.id;
+                if (aliasError && aliasError.code !== "PGRST116") {
+                  console.error(
+                    `[Experience] Error searching skill_aliases for "${skillName}":`,
+                    aliasError
+                  );
+                }
 
-                if (!skillId) {
+                let skillId: string | undefined =
+                  skillAlias?.skill_id || undefined;
+
+                if (skillId) {
+                  console.log(
+                    `[Experience] Found skill_id ${skillId} from skill_aliases for "${skillName}"`
+                  );
+                } else {
+                  console.log(
+                    `[Experience] No alias found for "${skillName}", creating new skill`
+                  );
+                  // 2. alias가 없으면 skills 테이블에 새로 생성
                   const { data: newSkill, error: skillError } = await supabase
                     .from("skills")
                     .insert({ name: skillName, is_verified: false })
@@ -395,24 +430,41 @@ export const action = async ({ request }: Route.ActionArgs) => {
                   if (skillError) {
                     if (skillError.code === "23505") {
                       // 중복 에러인 경우 다시 검색
+                      console.log(
+                        `[Experience] Duplicate skill detected for "${skillName}", retrying search`
+                      );
                       const { data: retrySkill } = await supabase
                         .from("skills")
                         .select("id")
                         .ilike("name", skillName)
                         .limit(1)
-                        .single();
+                        .maybeSingle();
                       skillId = retrySkill?.id;
+                      if (skillId) {
+                        console.log(
+                          `[Experience] Found existing skill_id ${skillId} for "${skillName}"`
+                        );
+                      }
                     } else {
-                      console.error("Skill creation error:", skillError);
+                      console.error(
+                        `[Experience] Skill creation error for "${skillName}":`,
+                        skillError
+                      );
                       continue;
                     }
                   } else {
                     skillId = newSkill?.id;
+                    console.log(
+                      `[Experience] Created new skill_id ${skillId} for "${skillName}"`
+                    );
                   }
                 }
 
                 if (skillId) {
                   // experience_skills에 저장
+                  console.log(
+                    `[Experience] Inserting into experience_skills: experience_id=${insertedExp.id}, skill_id=${skillId}`
+                  );
                   try {
                     const { error: skillInsertError } = await supabase
                       .from("experience_skills")
@@ -421,18 +473,39 @@ export const action = async ({ request }: Route.ActionArgs) => {
                         skill_id: skillId,
                       });
                     // 중복 에러는 무시
-                    if (skillInsertError && skillInsertError.code !== "23505") {
-                      console.error(
-                        "Experience skill insert error:",
-                        skillInsertError
+                    if (skillInsertError) {
+                      if (skillInsertError.code === "23505") {
+                        console.log(
+                          `[Experience] Duplicate entry ignored for experience_id=${insertedExp.id}, skill_id=${skillId}`
+                        );
+                      } else {
+                        console.error(
+                          `[Experience] Error inserting into experience_skills:`,
+                          skillInsertError
+                        );
+                      }
+                    } else {
+                      console.log(
+                        `[Experience] Successfully inserted skill ${skillId} for experience ${insertedExp.id}`
                       );
                     }
                   } catch (err: any) {
                     // 중복 에러는 무시
                     if (err?.code !== "23505") {
-                      console.error("Experience skill insert error:", err);
+                      console.error(
+                        `[Experience] Exception inserting into experience_skills:`,
+                        err
+                      );
+                    } else {
+                      console.log(
+                        `[Experience] Duplicate entry exception ignored`
+                      );
                     }
                   }
+                } else {
+                  console.error(
+                    `[Experience] Failed to get skillId for "${skillName}"`
+                  );
                 }
               }
             }
@@ -496,20 +569,41 @@ export const action = async ({ request }: Route.ActionArgs) => {
               const skillNames = sideProject.techStack
                 .split(",")
                 .map((s) => s.trim())
-                .filter((s) => s.length > 0);
+                .filter((s) => s.length > 0)
+                .map((s) => s.replace(/[A-Z]/g, (char) => char.toLowerCase())); // 영어만 소문자로 변환
 
               for (const skillName of skillNames) {
-                // skill 찾기 또는 생성
-                const { data: existingSkill } = await supabase
-                  .from("skills")
-                  .select("id")
-                  .ilike("name", skillName)
+                console.log(
+                  `[Side Project] Processing skill: "${skillName}" for side project ${insertedSP.id}`
+                );
+
+                // 1. skills_alias 테이블에서만 alias로 검색
+                const { data: skillAlias, error: aliasError } = await supabase
+                  .from("skill_aliases")
+                  .select("skill_id")
+                  .ilike("alias", skillName)
                   .limit(1)
-                  .single();
+                  .maybeSingle();
 
-                let skillId = existingSkill?.id;
+                if (aliasError && aliasError.code !== "PGRST116") {
+                  console.error(
+                    `[Side Project] Error searching skill_aliases for "${skillName}":`,
+                    aliasError
+                  );
+                }
 
-                if (!skillId) {
+                let skillId: string | undefined =
+                  skillAlias?.skill_id || undefined;
+
+                if (skillId) {
+                  console.log(
+                    `[Side Project] Found skill_id ${skillId} from skill_aliases for "${skillName}"`
+                  );
+                } else {
+                  console.log(
+                    `[Side Project] No alias found for "${skillName}", creating new skill`
+                  );
+                  // 2. alias가 없으면 skills 테이블에 새로 생성
                   const { data: newSkill, error: skillError } = await supabase
                     .from("skills")
                     .insert({ name: skillName, is_verified: false })
@@ -519,24 +613,41 @@ export const action = async ({ request }: Route.ActionArgs) => {
                   if (skillError) {
                     if (skillError.code === "23505") {
                       // 중복 에러인 경우 다시 검색
+                      console.log(
+                        `[Side Project] Duplicate skill detected for "${skillName}", retrying search`
+                      );
                       const { data: retrySkill } = await supabase
                         .from("skills")
                         .select("id")
                         .ilike("name", skillName)
                         .limit(1)
-                        .single();
+                        .maybeSingle();
                       skillId = retrySkill?.id;
+                      if (skillId) {
+                        console.log(
+                          `[Side Project] Found existing skill_id ${skillId} for "${skillName}"`
+                        );
+                      }
                     } else {
-                      console.error("Skill creation error:", skillError);
+                      console.error(
+                        `[Side Project] Skill creation error for "${skillName}":`,
+                        skillError
+                      );
                       continue;
                     }
                   } else {
                     skillId = newSkill?.id;
+                    console.log(
+                      `[Side Project] Created new skill_id ${skillId} for "${skillName}"`
+                    );
                   }
                 }
 
                 if (skillId) {
                   // side_project_skills에 저장
+                  console.log(
+                    `[Side Project] Inserting into side_project_skills: side_project_id=${insertedSP.id}, skill_id=${skillId}`
+                  );
                   try {
                     const { error: skillInsertError } = await supabase
                       .from("side_project_skills")
@@ -545,18 +656,39 @@ export const action = async ({ request }: Route.ActionArgs) => {
                         skill_id: skillId,
                       });
                     // 중복 에러는 무시
-                    if (skillInsertError && skillInsertError.code !== "23505") {
-                      console.error(
-                        "Side project skill insert error:",
-                        skillInsertError
+                    if (skillInsertError) {
+                      if (skillInsertError.code === "23505") {
+                        console.log(
+                          `[Side Project] Duplicate entry ignored for side_project_id=${insertedSP.id}, skill_id=${skillId}`
+                        );
+                      } else {
+                        console.error(
+                          `[Side Project] Error inserting into side_project_skills:`,
+                          skillInsertError
+                        );
+                      }
+                    } else {
+                      console.log(
+                        `[Side Project] Successfully inserted skill ${skillId} for side project ${insertedSP.id}`
                       );
                     }
                   } catch (err: any) {
                     // 중복 에러는 무시
                     if (err?.code !== "23505") {
-                      console.error("Side project skill insert error:", err);
+                      console.error(
+                        `[Side Project] Exception inserting into side_project_skills:`,
+                        err
+                      );
+                    } else {
+                      console.log(
+                        `[Side Project] Duplicate entry exception ignored`
+                      );
                     }
                   }
+                } else {
+                  console.error(
+                    `[Side Project] Failed to get skillId for "${skillName}"`
+                  );
                 }
               }
             }
@@ -768,6 +900,80 @@ const resumeCategories = {
   "그 외 활동": [],
 };
 
+// 스킬 스택 차트 컴포넌트
+const SkillStackChart = React.memo(
+  ({
+    data,
+  }: {
+    data: Array<{ name: string; years: number; displayText: string }>;
+  }) => {
+    const chartData = data.map((item) => ({
+      skill: item.name,
+      years: item.years,
+      displayText: item.displayText,
+    }));
+
+    const chartConfig = {
+      years: {
+        label: "사용 기간 (년)",
+        color: "hsl(217, 91%, 60%)", // 파란색
+      },
+      label: {
+        color: "hsl(var(--background))",
+      },
+    } satisfies ChartConfig;
+
+    // 가장 긴 막대의 값을 찾아서 domain을 조정하여 우측 여백 생성
+    const maxValue = Math.max(...chartData.map((d) => d.years));
+    const domainMax = maxValue * 1.1;
+
+    return (
+      <div className="w-full">
+        <ChartContainer config={chartConfig}>
+          <BarChart
+            accessibilityLayer
+            data={chartData}
+            layout="vertical"
+            margin={{
+              right: 16,
+            }}
+          >
+            <CartesianGrid horizontal={false} />
+            <YAxis
+              dataKey="skill"
+              type="category"
+              tickLine={false}
+              tickMargin={10}
+              axisLine={false}
+              hide
+            />
+            <XAxis dataKey="years" type="number" hide domain={[0, domainMax]} />
+            <Bar dataKey="years" fill="var(--color-years)" radius={4}>
+              <LabelList
+                dataKey="skill"
+                position="insideLeft"
+                offset={8}
+                className="fill-[hsl(var(--background))] dark:fill-[hsl(var(--foreground))]"
+                fontSize={12}
+                fontWeight={500}
+              />
+              <LabelList
+                dataKey="displayText"
+                position="right"
+                offset={8}
+                className="fill-foreground"
+                fontSize={12}
+                fontWeight={500}
+              />
+            </Bar>
+          </BarChart>
+        </ChartContainer>
+      </div>
+    );
+  }
+);
+SkillStackChart.displayName = "SkillStackChart";
+
 // 기술 스택 입력 컴포넌트 (자동완성 기능 포함)
 const SkillInput = React.memo(
   ({
@@ -789,6 +995,11 @@ const SkillInput = React.memo(
     const [showSuggestions, setShowSuggestions] = React.useState(false);
     const inputRef = React.useRef<HTMLInputElement>(null);
     const suggestionsRef = React.useRef<HTMLDivElement>(null);
+
+    // 영어만 소문자로 변환하는 함수
+    const toLowerCaseEnglish = (str: string): string => {
+      return str.replace(/[A-Z]/g, (char) => char.toLowerCase());
+    };
 
     // 초기값 설정
     React.useEffect(() => {
@@ -874,7 +1085,7 @@ const SkillInput = React.memo(
     }, [inputValue, getSupabaseClient]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const newValue = e.target.value;
+      const newValue = toLowerCaseEnglish(e.target.value);
       setInputValue(newValue);
 
       // 쉼표 입력 시 현재 입력값을 기술로 추가
@@ -892,7 +1103,7 @@ const SkillInput = React.memo(
         return;
       }
 
-      const trimmedSkill = skillName.trim();
+      const trimmedSkill = toLowerCaseEnglish(skillName.trim());
       const client = getSupabaseClient();
 
       // 선택된 기술 목록에 추가 (클라이언트가 없어도 UI는 업데이트)
@@ -950,13 +1161,13 @@ const SkillInput = React.memo(
       id: string;
       name: string;
     }) => {
-      addSkill(suggestion.name);
+      addSkill(toLowerCaseEnglish(suggestion.name));
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
       if (e.key === "Enter" && inputValue.trim()) {
         e.preventDefault();
-        addSkill(inputValue.trim());
+        addSkill(toLowerCaseEnglish(inputValue.trim()));
       } else if (e.key === "Backspace") {
         const target = e.currentTarget;
         // 입력 필드가 완전히 비어있고, 커서가 맨 앞에 있을 때만 마지막 뱃지 삭제
@@ -2934,12 +3145,12 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
                     return { start, end, display: `${start} – ${end}` };
                   }
 
-                  // 하나만 있으면 해당 값과 placeholder 반환
+                  // 시작일만 있으면 재직중으로 표시
                   if (start) {
                     return {
                       start,
-                      end: getPlaceholder("종료일"),
-                      display: `${start} – ${getPlaceholder("종료일")}`,
+                      end: "재직중",
+                      display: `${start} – 재직중`,
                     };
                   }
 
@@ -2978,9 +3189,7 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
                       )}
                       {(role || period) && <span className="mx-2">•</span>}
                       {period ? (
-                        <span
-                          className={`${!startDate || !endDate ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
-                        >
+                        <span className="text-gray-700 dark:text-gray-300">
                           {period.display}
                         </span>
                       ) : (
@@ -3062,12 +3271,12 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
                     return { start, end, display: `${start} – ${end}` };
                   }
 
-                  // 하나만 있으면 해당 값과 placeholder 반환
+                  // 시작일만 있으면 진행중으로 표시
                   if (start) {
                     return {
                       start,
-                      end: getPlaceholder("종료일"),
-                      display: `${start} – ${getPlaceholder("종료일")}`,
+                      end: "진행중",
+                      display: `${start} – 진행중`,
                     };
                   }
 
@@ -3093,9 +3302,7 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
                       {getDisplayValue("프로젝트명", projectName)}
                     </h3>
                     {period ? (
-                      <div
-                        className={`mb-2 ${!startDate || !endDate ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
-                      >
+                      <div className="mb-2 text-gray-700 dark:text-gray-300">
                         {period.display}
                       </div>
                     ) : (
@@ -3175,12 +3382,12 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
                     return { start, end, display: `${start} – ${end}` };
                   }
 
-                  // 하나만 있으면 해당 값과 placeholder 반환
+                  // 시작일만 있으면 재학중으로 표시
                   if (start) {
                     return {
                       start,
-                      end: getPlaceholder("종료일"),
-                      display: `${start} – ${getPlaceholder("종료일")}`,
+                      end: "재학중",
+                      display: `${start} – 재학중`,
                     };
                   }
 
@@ -3396,6 +3603,119 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
           );
         })()}
 
+        {/* 스킬 스택 그래프 섹션 */}
+        {selectedFields["스킬 스택 그래프"] &&
+          (() => {
+            // 스킬 사용 기간 계산 함수
+            const calculateSkillDurations = () => {
+              const skillMap = new Map<string, number>(); // skillName -> total months
+
+              // Experience 스킬 수집
+              dynamicItems.Experience.forEach((itemId) => {
+                if (!selectedFields[itemId]) return;
+
+                const skills = formData[`${itemId}_스킬`];
+                const startDate = formData[`${itemId}_시작일`];
+                const endDate = formData[`${itemId}_종료일`];
+
+                if (!skills || !startDate) return;
+
+                // 기간 계산 (월 단위)
+                const start = new Date(startDate + "-01");
+                const end = endDate ? new Date(endDate + "-01") : new Date();
+                const months = Math.max(
+                  0,
+                  (end.getFullYear() - start.getFullYear()) * 12 +
+                    (end.getMonth() - start.getMonth()) +
+                    1
+                );
+
+                // 스킬별로 기간 누적
+                skills
+                  .split(",")
+                  .map((s) => s.trim())
+                  .filter((s) => s.length > 0)
+                  .forEach((skillName) => {
+                    const current = skillMap.get(skillName) || 0;
+                    skillMap.set(skillName, current + months);
+                  });
+              });
+
+              // Side Project 스킬 수집
+              dynamicItems["Side Project"].forEach((itemId) => {
+                if (!selectedFields[itemId]) return;
+
+                const skills = formData[`${itemId}_기술스택`];
+                const startDate = formData[`${itemId}_시작일`];
+                const endDate = formData[`${itemId}_종료일`];
+
+                if (!skills || !startDate) return;
+
+                // 기간 계산 (월 단위)
+                const start = new Date(startDate + "-01");
+                const end = endDate ? new Date(endDate + "-01") : new Date();
+                const months = Math.max(
+                  0,
+                  (end.getFullYear() - start.getFullYear()) * 12 +
+                    (end.getMonth() - start.getMonth()) +
+                    1
+                );
+
+                // 스킬별로 기간 누적
+                skills
+                  .split(",")
+                  .map((s) => s.trim())
+                  .filter((s) => s.length > 0)
+                  .forEach((skillName) => {
+                    const current = skillMap.get(skillName) || 0;
+                    skillMap.set(skillName, current + months);
+                  });
+              });
+
+              // 상위 5개 추출 및 년/개월 정보 포함
+              return Array.from(skillMap.entries())
+                .map(([name, months]) => {
+                  const years = Math.floor(months / 12);
+                  const remainingMonths = months % 12;
+                  let displayText = "";
+                  if (years === 0) {
+                    displayText = `${remainingMonths}개월`;
+                  } else if (remainingMonths === 0) {
+                    displayText = `${years}년`;
+                  } else {
+                    displayText = `${years}년 ${remainingMonths}개월`;
+                  }
+                  return {
+                    name,
+                    months,
+                    years: months / 12, // 차트용 (소수점)
+                    displayText,
+                  };
+                })
+                .sort((a, b) => b.months - a.months)
+                .slice(0, 6);
+            };
+
+            const topSkills = calculateSkillDurations();
+
+            if (topSkills.length === 0) return null;
+
+            return (
+              <section className="mb-10">
+                <hr className="border-gray-300 dark:border-gray-600 mb-4" />
+                <h2 className="text-2xl font-bold mb-2 text-gray-900 dark:text-gray-100">
+                  스킬 스택 그래프
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                  사용 기간이 가장 긴 6개의 스킬만 표시됩니다
+                </p>
+                <div className="w-full">
+                  <SkillStackChart data={topSkills} />
+                </div>
+              </section>
+            );
+          })()}
+
         {/* 다른 섹션들도 여기에 추가 가능 */}
         {Object.entries(resumeCategories)
           .filter(
@@ -3406,7 +3726,8 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
               category !== "Education" &&
               category !== "자격증" &&
               category !== "어학성적" &&
-              category !== "그 외 활동"
+              category !== "그 외 활동" &&
+              category !== "스킬 스택 그래프"
           )
           .map(([category]) => {
             const categoryFields = resumeCategories[
@@ -3912,7 +4233,7 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
                           <div className="flex gap-4 pt-4">
                             <Button
                               type="button"
-                              className="flex-1"
+                              className="flex-1 cursor-pointer border"
                               onClick={(e) => {
                                 e.preventDefault();
                                 setShowTitleDialog(true);
@@ -3931,7 +4252,7 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
                             <Button
                               type="button"
                               variant="outline"
-                              className="flex-1"
+                              className="flex-1 cursor-pointer"
                               onClick={(e) => {
                                 e.preventDefault();
                                 setIsPreviewMode(true);
@@ -3988,7 +4309,7 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
               <Button
                 onClick={handleSaveResume}
                 disabled={!resumeTitle.trim() || fetcher.state === "submitting"}
-                className="cursor-pointer"
+                className="cursor-pointer border"
               >
                 {fetcher.state === "submitting" ? (
                   <>

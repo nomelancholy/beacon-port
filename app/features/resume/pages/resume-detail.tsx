@@ -20,6 +20,20 @@ import { createSupabaseServerClient } from "~/supabase/server";
 import { cn } from "~/lib/utils";
 import { useToast, Toast } from "../../../components/ui/toast";
 import { Loader2 } from "lucide-react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  LabelList,
+  XAxis,
+  YAxis,
+} from "recharts";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "../../../components/ui/chart";
 
 export function meta({ data }: Route.MetaArgs) {
   if (!data || !data.resume) {
@@ -175,7 +189,8 @@ const formatDate = (dateStr: string | null | undefined): string | null => {
 // 기간 포맷팅 함수
 const formatPeriod = (
   startDate: string | null | undefined,
-  endDate: string | null | undefined
+  endDate: string | null | undefined,
+  statusText: string = "진행중"
 ) => {
   const start = formatDate(startDate);
   const end = formatDate(endDate);
@@ -189,8 +204,8 @@ const formatPeriod = (
   if (start) {
     return {
       start,
-      end: getPlaceholder("종료일"),
-      display: `${start} – ${getPlaceholder("종료일")}`,
+      end: statusText,
+      display: `${start} – ${statusText}`,
     };
   }
 
@@ -204,6 +219,80 @@ const formatPeriod = (
 
   return null;
 };
+
+// 스킬 스택 차트 컴포넌트
+const SkillStackChart = React.memo(
+  ({
+    data,
+  }: {
+    data: Array<{ name: string; years: number; displayText: string }>;
+  }) => {
+    const chartData = data.map((item) => ({
+      skill: item.name,
+      years: item.years,
+      displayText: item.displayText,
+    }));
+
+    const chartConfig = {
+      years: {
+        label: "사용 기간 (년)",
+        color: "hsl(217, 91%, 60%)", // 파란색
+      },
+      label: {
+        color: "hsl(var(--background))",
+      },
+    } satisfies ChartConfig;
+
+    // 가장 긴 막대의 값을 찾아서 domain을 조정하여 우측 여백 생성
+    const maxValue = Math.max(...chartData.map((d) => d.years));
+    const domainMax = maxValue * 1.1;
+
+    return (
+      <div className="w-full">
+        <ChartContainer config={chartConfig}>
+          <BarChart
+            accessibilityLayer
+            data={chartData}
+            layout="vertical"
+            margin={{
+              right: 16,
+            }}
+          >
+            <CartesianGrid horizontal={false} />
+            <YAxis
+              dataKey="skill"
+              type="category"
+              tickLine={false}
+              tickMargin={10}
+              axisLine={false}
+              hide
+            />
+            <XAxis dataKey="years" type="number" hide domain={[0, domainMax]} />
+            <Bar dataKey="years" fill="var(--color-years)" radius={4}>
+              <LabelList
+                dataKey="skill"
+                position="insideLeft"
+                offset={8}
+                className="fill-[hsl(var(--background))] dark:fill-[hsl(var(--foreground))]"
+                fontSize={12}
+                fontWeight={500}
+              />
+              <LabelList
+                dataKey="displayText"
+                position="right"
+                offset={8}
+                className="fill-foreground"
+                fontSize={12}
+                fontWeight={500}
+              />
+            </Bar>
+          </BarChart>
+        </ChartContainer>
+      </div>
+    );
+  }
+);
+SkillStackChart.displayName = "SkillStackChart";
 
 export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
   if (!loaderData) return null;
@@ -591,7 +680,11 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
                 Experience
               </h2>
               {experiences.map((exp: any) => {
-                const period = formatPeriod(exp.start_date, exp.end_date);
+                const period = formatPeriod(
+                  exp.start_date,
+                  exp.end_date,
+                  "재직중"
+                );
 
                 return (
                   <div key={exp.id} className="mb-10">
@@ -657,7 +750,8 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
               {sideProjects.map((project: any) => {
                 const period = formatPeriod(
                   project.start_date,
-                  project.end_date
+                  project.end_date,
+                  "진행중"
                 );
 
                 return (
@@ -711,7 +805,11 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
                 Education
               </h2>
               {educations.map((edu: any) => {
-                const period = formatPeriod(edu.start_date, edu.end_date);
+                const period = formatPeriod(
+                  edu.start_date,
+                  edu.end_date,
+                  "재학중"
+                );
 
                 return (
                   <div key={edu.id} className="mb-10">
@@ -839,6 +937,112 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
               ))}
             </section>
           )}
+
+          {/* 스킬 스택 그래프 섹션 */}
+          {(() => {
+            // 스킬 사용 기간 계산 함수
+            const calculateSkillDurations = () => {
+              const skillMap = new Map<string, number>(); // skillName -> total months
+
+              // Experience 스킬 수집
+              experiences.forEach((exp: any) => {
+                if (!exp.skills || !exp.skills.length || !exp.start_date)
+                  return;
+
+                // 기간 계산 (월 단위)
+                const start = new Date(exp.start_date);
+                const end = exp.end_date ? new Date(exp.end_date) : new Date();
+                const months = Math.max(
+                  0,
+                  (end.getFullYear() - start.getFullYear()) * 12 +
+                    (end.getMonth() - start.getMonth()) +
+                    1
+                );
+
+                // 스킬별로 기간 누적
+                exp.skills.forEach((skill: any) => {
+                  if (skill && skill.name) {
+                    const skillName = skill.name;
+                    const current = skillMap.get(skillName) || 0;
+                    skillMap.set(skillName, current + months);
+                  }
+                });
+              });
+
+              // Side Project 스킬 수집
+              sideProjects.forEach((project: any) => {
+                if (
+                  !project.skills ||
+                  !project.skills.length ||
+                  !project.start_date
+                )
+                  return;
+
+                // 기간 계산 (월 단위)
+                const start = new Date(project.start_date);
+                const end = project.end_date
+                  ? new Date(project.end_date)
+                  : new Date();
+                const months = Math.max(
+                  0,
+                  (end.getFullYear() - start.getFullYear()) * 12 +
+                    (end.getMonth() - start.getMonth()) +
+                    1
+                );
+
+                // 스킬별로 기간 누적
+                project.skills.forEach((skill: any) => {
+                  if (skill && skill.name) {
+                    const skillName = skill.name;
+                    const current = skillMap.get(skillName) || 0;
+                    skillMap.set(skillName, current + months);
+                  }
+                });
+              });
+
+              // 상위 5개 추출 및 년/개월 정보 포함
+              return Array.from(skillMap.entries())
+                .map(([name, months]) => {
+                  const years = Math.floor(months / 12);
+                  const remainingMonths = months % 12;
+                  let displayText = "";
+                  if (years === 0) {
+                    displayText = `${remainingMonths}개월`;
+                  } else if (remainingMonths === 0) {
+                    displayText = `${years}년`;
+                  } else {
+                    displayText = `${years}년 ${remainingMonths}개월`;
+                  }
+                  return {
+                    name,
+                    months,
+                    years: months / 12, // 차트용 (소수점)
+                    displayText,
+                  };
+                })
+                .sort((a, b) => b.months - a.months)
+                .slice(0, 6);
+            };
+
+            const topSkills = calculateSkillDurations();
+
+            if (topSkills.length === 0) return null;
+
+            return (
+              <section className="mb-10">
+                <hr className="border-gray-300 dark:border-gray-600 mb-4" />
+                <h2 className="text-2xl font-bold mb-2 text-gray-900 dark:text-gray-100">
+                  스킬 스택 그래프
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                  사용 기간이 가장 긴 6개의 스킬만 표시됩니다
+                </p>
+                <div className="w-full">
+                  <SkillStackChart data={topSkills} />
+                </div>
+              </section>
+            );
+          })()}
         </div>
       </div>
       {toast && (
