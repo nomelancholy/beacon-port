@@ -1,6 +1,8 @@
 import * as React from "react";
 import type { Route } from "./+types/add-resume";
-import { useNavigate } from "react-router";
+import { useNavigate, useFetcher } from "react-router";
+import { createSupabaseServerClient } from "~/supabase/server";
+import { redirect } from "react-router";
 import {
   ChevronDown,
   Github,
@@ -57,6 +59,14 @@ import {
   CardHeader,
   CardTitle,
 } from "../../../components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogClose,
+} from "../../../components/ui/dialog";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -67,6 +77,84 @@ export function meta({}: Route.MetaArgs) {
     },
   ];
 }
+
+export const action = async ({ request }: Route.ActionArgs) => {
+  if (request.method === "POST") {
+    const headers = new Headers();
+    const supabase = createSupabaseServerClient(request, headers);
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      throw new Response("Unauthorized", { status: 401 });
+    }
+
+    const formData = await request.formData();
+    const intent = formData.get("intent");
+
+    if (intent === "save-resume") {
+      // About Me 필드 매핑
+      const title = formData.get("title") as string;
+      if (!title || title.trim() === "") {
+        return {
+          success: false,
+          error: "이력서 제목을 입력해주세요.",
+        };
+      }
+
+      const resumeData = {
+        user_id: user.id,
+        title: title.trim(),
+        name: (formData.get("이름") as string) || "",
+        role: (formData.get("Role") as string) || null,
+        phone: (formData.get("전화번호") as string) || null,
+        email: (formData.get("이메일") as string) || null,
+        website: (formData.get("웹사이트") as string) || null,
+        linkedin: (formData.get("LinkedIn") as string) || null,
+        instagram: (formData.get("Instagram") as string) || null,
+        facebook: (formData.get("Facebook") as string) || null,
+        github: (formData.get("Github") as string) || null,
+        youtube: (formData.get("Youtube") as string) || null,
+        introduce: (formData.get("Introduce") as string) || null,
+        english_level:
+          (formData.get("영어 구사 능력") as
+            | "Native"
+            | "Advanced"
+            | "Intermediate"
+            | "Basic") || null,
+        is_public: false,
+      };
+
+      // name은 필수 필드
+      if (!resumeData.name) {
+        return {
+          success: false,
+          error: "이름은 필수 입력 항목입니다.",
+        };
+      }
+
+      const { data, error } = await supabase
+        .from("resumes")
+        .insert(resumeData)
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Resume creation error:", error);
+        return {
+          success: false,
+          error: error.message,
+        };
+      }
+
+      // 저장 성공 시 이력서 상세 페이지로 리다이렉트
+      return redirect(`/resume/${data.id}`, { headers });
+    }
+  }
+
+  return { success: false };
+};
 
 // 카테고리와 하위 항목 정의
 const resumeCategories = {
@@ -1076,6 +1164,7 @@ const DraggableCard = React.memo(
 
 export default function AddResume() {
   const navigate = useNavigate();
+  const fetcher = useFetcher();
 
   // About Me 하위 항목들을 기본값으로 모두 선택
   const getInitialSelectedFields = () => {
@@ -1091,6 +1180,8 @@ export default function AddResume() {
   >(getInitialSelectedFields);
   const [formData, setFormData] = React.useState<Record<string, string>>({});
   const [isPreviewMode, setIsPreviewMode] = React.useState(false);
+  const [showTitleDialog, setShowTitleDialog] = React.useState(false);
+  const [resumeTitle, setResumeTitle] = React.useState("");
   const [openCategories, setOpenCategories] = React.useState<
     Record<string, boolean>
   >({
@@ -1224,6 +1315,24 @@ export default function AddResume() {
     },
     []
   );
+
+  const handleSaveResume = () => {
+    if (!resumeTitle.trim()) return;
+
+    // formData에 title 추가하고 제출
+    const formDataToSubmit = new FormData();
+    formDataToSubmit.append("intent", "save-resume");
+    formDataToSubmit.append("title", resumeTitle.trim());
+
+    // 기존 formData의 모든 필드를 추가
+    Object.entries(formData).forEach(([key, value]) => {
+      formDataToSubmit.append(key, value);
+    });
+
+    fetcher.submit(formDataToSubmit, { method: "POST" });
+    setShowTitleDialog(false);
+    setResumeTitle("");
+  };
 
   // 파일 업로드 핸들러
   const handleFileChange = (field: string, file: File | null) => {
@@ -2393,7 +2502,12 @@ export default function AddResume() {
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <form className="space-y-6">
+                      <fetcher.Form className="space-y-6" method="POST">
+                        <input
+                          type="hidden"
+                          name="intent"
+                          value="save-resume"
+                        />
                         {/* About Me 필드들 */}
                         {resumeCategories["About Me"]
                           .filter((field) => selectedFields[field])
@@ -2607,7 +2721,14 @@ export default function AddResume() {
                           .filter((field) => selectedFields[field]).length >
                           0 && (
                           <div className="flex gap-4 pt-4">
-                            <Button type="submit" className="flex-1">
+                            <Button
+                              type="button"
+                              className="flex-1"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                setShowTitleDialog(true);
+                              }}
+                            >
                               저장하기
                             </Button>
                             <Button
@@ -2623,7 +2744,7 @@ export default function AddResume() {
                             </Button>
                           </div>
                         )}
-                      </form>
+                      </fetcher.Form>
                     </CardContent>
                   </Card>
                 </div>
@@ -2632,6 +2753,52 @@ export default function AddResume() {
           </SidebarInset>
         </div>
       </SidebarProvider>
+
+      {/* 제목 입력 다이얼로그 */}
+      <Dialog open={showTitleDialog} onOpenChange={setShowTitleDialog}>
+        <DialogContent>
+          <DialogClose onClose={() => setShowTitleDialog(false)} />
+          <DialogHeader>
+            <DialogTitle>이력서 제목 입력</DialogTitle>
+            <DialogDescription>
+              이력서를 구분할 수 있는 제목을 입력해주세요.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <Input
+              type="text"
+              value={resumeTitle}
+              onChange={(e) => setResumeTitle(e.target.value)}
+              placeholder="예: 프론트엔드 개발자 이력서"
+              className="w-full cursor-pointer"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && resumeTitle.trim()) {
+                  handleSaveResume();
+                }
+              }}
+            />
+            <div className="flex gap-3 justify-end">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowTitleDialog(false);
+                  setResumeTitle("");
+                }}
+                className="cursor-pointer"
+              >
+                취소
+              </Button>
+              <Button
+                onClick={handleSaveResume}
+                disabled={!resumeTitle.trim()}
+                className="cursor-pointer"
+              >
+                저장하기
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </DndContext>
   );
 }

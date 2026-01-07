@@ -374,6 +374,13 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
               >
                 {getDisplayValue("이름", resume.name)}
               </h1>
+              {resume.role && (
+                <h2
+                  className={`text-2xl font-normal ${!resume.role ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-600 dark:text-gray-400"}`}
+                >
+                  {getDisplayValue("Role", resume.role)}
+                </h2>
+              )}
             </div>
 
             {/* 오른쪽: 소셜 미디어 아이콘들과 연락처 정보 */}

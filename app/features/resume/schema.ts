@@ -26,6 +26,7 @@ export const resumes = pgTable("resumes", {
   title: text("title").notNull(),
   isPublic: boolean("is_public").notNull().default(false),
   name: text("name").notNull(),
+  role: text("role"),
   phone: text("phone"),
   email: text("email"),
   website: text("website"),
