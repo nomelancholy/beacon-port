@@ -382,21 +382,31 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
           ref={resumeContentRef}
           className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-12 max-w-3xl mx-auto print:shadow-none print:p-8"
         >
-          {/* 헤더: 이름/Role과 소셜 아이콘 */}
+          {/* 헤더: 사진, 이름/Role과 소셜 아이콘 */}
           <div className="flex items-start justify-between mb-8">
-            <div className="flex-1">
-              <h1
-                className={`text-5xl font-bold mb-3 ${!resume.name ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-900 dark:text-gray-100"}`}
-              >
-                {getDisplayValue("이름", resume.name)}
-              </h1>
-              {resume.role && (
-                <h2
-                  className={`text-2xl font-normal ${!resume.role ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-600 dark:text-gray-400"}`}
-                >
-                  {getDisplayValue("Role", resume.role)}
-                </h2>
+            <div className="flex-1 flex items-start gap-6">
+              {/* 사진 표시 */}
+              {resume.photo && (
+                <img
+                  src={resume.photo}
+                  alt="프로필 사진"
+                  className="w-32 h-32 rounded-full object-cover border-4 border-gray-300 dark:border-gray-600 shadow-lg flex-shrink-0"
+                />
               )}
+              <div className="flex-1">
+                <h1
+                  className={`text-5xl font-bold mb-3 ${!resume.name ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-900 dark:text-gray-100"}`}
+                >
+                  {getDisplayValue("이름", resume.name)}
+                </h1>
+                {resume.role && (
+                  <h2
+                    className={`text-2xl font-normal ${!resume.role ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-600 dark:text-gray-400"}`}
+                  >
+                    {getDisplayValue("Role", resume.role)}
+                  </h2>
+                )}
+              </div>
             </div>
 
             {/* 오른쪽: 소셜 미디어 아이콘들과 연락처 정보 */}

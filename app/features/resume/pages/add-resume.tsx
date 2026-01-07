@@ -70,6 +70,9 @@ import {
 import { Badge } from "../../../components/ui/badge";
 import { createBrowserClient } from "@supabase/ssr";
 import type { Database } from "../../../../database.types";
+import imageCompression from "browser-image-compression";
+import { Loader2 } from "lucide-react";
+import { useToast, Toast } from "../../../components/ui/toast";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -106,10 +109,60 @@ export const action = async ({ request }: Route.ActionArgs) => {
         };
       }
 
+      // 사진 업로드 처리 (base64가 있으면 Storage에 업로드)
+      let photoUrl: string | null = null;
+      const photoBase64 = formData.get("사진") as string;
+      if (photoBase64 && photoBase64.startsWith("data:image/")) {
+        try {
+          // base64에서 데이터 추출
+          const base64Data = photoBase64.split(",")[1];
+          const mimeMatch = photoBase64.match(/data:image\/([^;]+)/);
+          const mimeType = mimeMatch ? mimeMatch[1] : "jpeg";
+          const fileExt =
+            mimeType === "png" ? "png" : mimeType === "gif" ? "gif" : "jpg";
+
+          // Buffer로 변환
+          const buffer = Buffer.from(base64Data, "base64");
+
+          // 고유한 파일명 생성
+          const fileName = `${user.id}_${Date.now()}.${fileExt}`;
+          const filePath = `${user.id}/${fileName}`;
+
+          // Supabase Storage에 업로드
+          const { data: uploadData, error: uploadError } =
+            await supabase.storage.from("photos").upload(filePath, buffer, {
+              contentType: `image/${mimeType}`,
+              cacheControl: "3600",
+              upsert: false,
+            });
+
+          if (uploadError) {
+            console.error("Photo upload error:", uploadError);
+            return {
+              success: false,
+              error: "사진 업로드에 실패했습니다.",
+            };
+          }
+
+          // 공개 URL 가져오기
+          const {
+            data: { publicUrl },
+          } = supabase.storage.from("photos").getPublicUrl(filePath);
+          photoUrl = publicUrl;
+        } catch (error) {
+          console.error("Photo processing error:", error);
+          return {
+            success: false,
+            error: "사진 처리 중 오류가 발생했습니다.",
+          };
+        }
+      }
+
       const resumeData = {
         user_id: user.id,
         title: title.trim(),
         name: (formData.get("이름") as string) || "",
+        photo: photoUrl,
         role: (formData.get("Role") as string) || null,
         phone: (formData.get("전화번호") as string) || null,
         email: (formData.get("이메일") as string) || null,
@@ -1849,6 +1902,7 @@ const DraggableCard = React.memo(
 export default function AddResume() {
   const navigate = useNavigate();
   const fetcher = useFetcher();
+  const { toast, showToast, hideToast } = useToast();
 
   // About Me 하위 항목들을 기본값으로 모두 선택
   const getInitialSelectedFields = () => {
@@ -1866,11 +1920,23 @@ export default function AddResume() {
   const [isPreviewMode, setIsPreviewMode] = React.useState(false);
   const [showTitleDialog, setShowTitleDialog] = React.useState(false);
   const [resumeTitle, setResumeTitle] = React.useState("");
+  const [isUploadingPhoto, setIsUploadingPhoto] = React.useState(false);
   const [openCategories, setOpenCategories] = React.useState<
     Record<string, boolean>
   >({
     "About Me": true,
   });
+
+  // 저장 상태 모니터링 및 에러 처리
+  React.useEffect(() => {
+    if (fetcher.data) {
+      if (fetcher.data.error) {
+        showToast(fetcher.data.error, "error");
+      } else if (fetcher.data.success === false && fetcher.data.error) {
+        showToast(fetcher.data.error, "error");
+      }
+    }
+  }, [fetcher.data, showToast]);
 
   // 동적 항목 관리 (Experience, Side Project 등)
   const [dynamicItems, setDynamicItems] = React.useState<
@@ -2018,27 +2084,70 @@ export default function AddResume() {
     setResumeTitle("");
   };
 
-  // 파일 업로드 핸들러
-  const handleFileChange = (field: string, file: File | null) => {
+  // 파일 선택 핸들러 (미리보기만)
+  const handleFileChange = async (field: string, file: File | null) => {
     if (!file) {
       setFormData((prev) => {
         const newData = { ...prev };
         delete newData[field];
+        delete newData[`${field}_file`]; // 원본 파일 정보도 삭제
         return newData;
       });
       return;
     }
 
-    // 파일을 base64로 변환하여 저장
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64String = reader.result as string;
-      setFormData((prev) => ({
-        ...prev,
-        [field]: base64String,
-      }));
-    };
-    reader.readAsDataURL(file);
+    // 파일 타입 검증
+    if (!file.type.startsWith("image/")) {
+      alert("이미지 파일만 업로드 가능합니다.");
+      return;
+    }
+
+    // 파일 크기 검증 (2MB = 2 * 1024 * 1024 bytes)
+    const maxSize = 2 * 1024 * 1024;
+    if (file.size > maxSize) {
+      alert("파일 크기는 2MB 이하여야 합니다.");
+      return;
+    }
+
+    setIsUploadingPhoto(true);
+
+    try {
+      // 이미지 압축 옵션
+      const options = {
+        maxSizeMB: 2, // 최대 2MB
+        maxWidthOrHeight: 1920, // 최대 너비/높이
+        useWebWorker: true,
+        fileType: file.type,
+      };
+
+      // 이미지 압축
+      const compressedFile = await imageCompression(file, options);
+
+      // 압축된 파일을 base64로 변환하여 미리보기용으로 저장
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        setFormData((prev) => ({
+          ...prev,
+          [field]: base64String, // 미리보기용 base64
+          [`${field}_file`]: JSON.stringify({
+            name: compressedFile.name,
+            type: compressedFile.type,
+            size: compressedFile.size,
+          }), // 파일 메타데이터 저장
+        }));
+        setIsUploadingPhoto(false);
+      };
+      reader.onerror = () => {
+        alert("이미지 읽기에 실패했습니다.");
+        setIsUploadingPhoto(false);
+      };
+      reader.readAsDataURL(compressedFile);
+    } catch (error) {
+      console.error("Image compression error:", error);
+      alert("이미지 처리 중 오류가 발생했습니다.");
+      setIsUploadingPhoto(false);
+    }
   };
 
   const renderFormField = (
@@ -2110,16 +2219,25 @@ export default function AddResume() {
         </label>
         {field === "사진" ? (
           <div className="space-y-4">
-            <input
-              id={field}
-              name={field}
-              type="file"
-              accept="image/*"
-              onChange={(e) =>
-                handleFileChange(field, e.target.files?.[0] || null)
-              }
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            />
+            <div className="flex items-center gap-4">
+              <input
+                id={field}
+                name={field}
+                type="file"
+                accept="image/*"
+                onChange={(e) =>
+                  handleFileChange(field, e.target.files?.[0] || null)
+                }
+                disabled={isUploadingPhoto}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              />
+              {isUploadingPhoto && (
+                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>처리 중...</span>
+                </div>
+              )}
+            </div>
             {formData[field] && (
               <div className="mt-4">
                 <img
@@ -3594,8 +3712,16 @@ export default function AddResume() {
                                 e.preventDefault();
                                 setShowTitleDialog(true);
                               }}
+                              disabled={fetcher.state === "submitting"}
                             >
-                              저장하기
+                              {fetcher.state === "submitting" ? (
+                                <>
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  저장 중...
+                                </>
+                              ) : (
+                                "저장하기"
+                              )}
                             </Button>
                             <Button
                               type="button"
@@ -3656,15 +3782,25 @@ export default function AddResume() {
               </Button>
               <Button
                 onClick={handleSaveResume}
-                disabled={!resumeTitle.trim()}
+                disabled={!resumeTitle.trim() || fetcher.state === "submitting"}
                 className="cursor-pointer"
               >
-                저장하기
+                {fetcher.state === "submitting" ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    저장 중...
+                  </>
+                ) : (
+                  "저장하기"
+                )}
               </Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
+      {toast && (
+        <Toast message={toast.message} type={toast.type} onClose={hideToast} />
+      )}
     </DndContext>
   );
 }
