@@ -1,65 +1,136 @@
 # Beacon Port
 
-React Router v7 + TypeScript + Tailwind CSS + shadcn/ui 프로젝트
+**인재의 신호가 모이는 곳** - 온라인 이력서 작성 및 공유 플랫폼
 
-## 시작하기
+Beacon Port는 사용자가 쉽고 직관적으로 이력서를 작성하고, 공유할 수 있는 웹 애플리케이션입니다. 드래그 앤 드롭으로 항목 순서를 조정하고, 실시간 미리보기로 작성 중인 이력서를 확인할 수 있습니다.
 
-### 개발 서버 실행
+## 주요 기능
 
-```bash
-npm run dev
-```
+### 📝 이력서 관리
 
-### 빌드
+- **이력서 작성/수정**: 직관적인 UI로 이력서 작성 및 수정
+- **실시간 미리보기**: 작성 중인 이력서를 실시간으로 미리보기
+- **드래그 앤 드롭**: 항목 순서를 드래그 앤 드롭으로 자유롭게 조정
+- **이력서 삭제**: 작성한 이력서 삭제 기능
+- **공개/비공개 설정**: 이력서를 공개 또는 비공개로 설정
 
-```bash
-npm run build
-```
+### 📊 스킬 스택 그래프
 
-### 타입 체크
+- 경력과 사이드 프로젝트에서 사용한 기술 스택을 시각화
+- 사용 기간이 가장 긴 상위 6개 스킬을 자동으로 표시
+- "X년 Y개월" 형식으로 사용 기간 표시
 
-```bash
-npm run typecheck
-```
+### 👤 사용자 인증
+
+- **이메일 회원가입/로그인**: 이메일과 비밀번호로 회원가입 및 로그인
+- **GitHub OAuth**: GitHub 계정으로 간편 로그인
+- **비밀번호 검증**: 최소 8자, 영문/숫자/특수문자 포함 강제
+
+### 📱 반응형 디자인
+
+- 모바일, 태블릿, 데스크톱 모든 기기에서 최적화된 UI
+- 모바일에서 사이드바를 햄버거 메뉴로 전환
+- 터치 친화적인 인터페이스
+
+### 🖨️ 인쇄 기능
+
+- 이력서를 PDF로 저장하거나 인쇄 가능
+- 인쇄 시 불필요한 요소(헤더, 푸터 등) 자동 제거
+
+### 🔒 접근 제어
+
+- 비공개 이력서는 소유자만 접근 가능
+- 공개 이력서는 링크를 통해 누구나 접근 가능
+- 비공개 이력서 접근 시 명확한 안내 메시지 표시
 
 ## 기술 스택
 
-- **React Router v7**: 최신 버전의 React Router
-- **TypeScript**: 타입 안정성
+### 프론트엔드
+
+- **React Router v7**: 최신 버전의 React Router로 서버 사이드 렌더링 지원
+- **TypeScript**: 타입 안정성 보장
 - **Tailwind CSS v4**: 유틸리티 우선 CSS 프레임워크
-- **shadcn/ui**: 재사용 가능한 컴포넌트 라이브러리
+- **shadcn/ui**: 재사용 가능한 UI 컴포넌트 라이브러리
+- **Recharts**: 스킬 스택 그래프 시각화
+- **dnd-kit**: 드래그 앤 드롭 기능 구현
+
+### 백엔드 & 데이터베이스
+
+- **Supabase**: 인증 및 데이터베이스 서비스
+  - PostgreSQL 데이터베이스
+  - Row Level Security (RLS)로 데이터 보안
+  - Storage를 통한 이미지 저장
+- **Drizzle ORM**: 타입 안전한 데이터베이스 쿼리
+- **Zod**: 스키마 검증
+
+### 기타 라이브러리
+
+- **browser-image-compression**: 이미지 압축
+- **lucide-react**: 아이콘 라이브러리
 
 ## 프로젝트 구조
 
 ```
 beacon-port/
 ├── app/
-│   ├── components/     # React 컴포넌트
-│   │   └── ui/        # shadcn/ui 컴포넌트
-│   ├── lib/           # 유틸리티 함수
-│   ├── routes/        # 라우트 파일
-│   ├── app.css        # 전역 스타일
-│   └── root.tsx       # 루트 컴포넌트
-├── public/            # 정적 파일
-└── components.json    # shadcn/ui 설정
+│   ├── common/              # 공통 페이지 (홈)
+│   ├── components/          # React 컴포넌트
+│   │   └── ui/            # shadcn/ui 컴포넌트
+│   ├── features/           # 기능별 모듈
+│   │   ├── auth/          # 인증 관련
+│   │   │   ├── pages/     # 로그인, 회원가입 페이지
+│   │   │   └── schema.ts # 인증 스키마
+│   │   └── resume/        # 이력서 관련
+│   │       ├── pages/     # 이력서 작성/수정/상세 페이지
+│   │       ├── queries.ts # 데이터베이스 쿼리
+│   │       └── schema.ts # 이력서 스키마
+│   ├── lib/               # 유틸리티 함수
+│   ├── sql/               # SQL 마이그레이션 파일
+│   ├── supabase/          # Supabase 클라이언트 설정
+│   ├── app.css            # 전역 스타일
+│   └── root.tsx           # 루트 컴포넌트
+├── public/                # 정적 파일
+├── components.json        # shadcn/ui 설정
+├── drizzle.config.ts      # Drizzle 설정
+└── package.json
 ```
 
-## shadcn/ui 컴포넌트 추가
+## 주요 기능 상세
 
-새로운 shadcn/ui 컴포넌트를 추가하려면:
+### 이력서 작성
 
-```bash
-npx shadcn@latest add [component-name]
-```
+- **About Me**: 이름, 역할, 사진, 연락처, 주소, 소셜 미디어 링크, 자기소개
+- **Experience**: 회사명, 역할, 기간, 기술 스택, 작업 내용
+- **Side Project**: 프로젝트명, 기간, 링크, 기술 스택, 설명
+- **Education**: 기관명, 전공, 기간, 교육 내용
+- **자격증**: 자격증명, 발급기관, 취득일
+- **어학 성적**: 시험명, 점수, 응시일
+- **그 외 활동**: 활동명, 기간, 링크, 활동 내용
 
-예시:
-```bash
-npx shadcn@latest add button
-npx shadcn@latest add card
-```
+### 스킬 관리
 
-## 참고 자료
+- 기술 스택 자동완성 기능
+- 영어 스킬명은 자동으로 소문자 변환
+- `skills_alias` 테이블을 통한 스킬 별칭 관리
+- 미검증 스킬 자동 생성 (`is_verified: false`)
 
-- [React Router 문서](https://reactrouter.com/)
-- [Tailwind CSS 문서](https://tailwindcss.com/)
-- [shadcn/ui 문서](https://ui.shadcn.com/)
+### 스킬 스택 그래프
+
+- 경력과 사이드 프로젝트에서 사용한 기술의 누적 사용 기간 계산
+- 상위 6개 스킬을 막대 그래프로 시각화
+- 모바일에서도 최적화된 레이아웃
+
+### 코드 스타일
+
+- TypeScript 사용
+- Tailwind CSS로 스타일링
+- 컴포넌트는 함수형 컴포넌트 사용
+- React Hooks 활용
+
+## 문의
+
+건의 사항 및 문의: takeknowledge90@gmail.com
+
+---
+
+**Beacon Port** - 인재의 신호가 모이는 곳

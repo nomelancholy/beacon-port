@@ -911,6 +911,17 @@ const SkillStackChart = React.memo(
   }: {
     data: Array<{ name: string; years: number; displayText: string }>;
   }) => {
+    const [isMobile, setIsMobile] = React.useState(false);
+
+    React.useEffect(() => {
+      const checkMobile = () => {
+        setIsMobile(window.innerWidth < 640);
+      };
+      checkMobile();
+      window.addEventListener("resize", checkMobile);
+      return () => window.removeEventListener("resize", checkMobile);
+    }, []);
+
     const chartData = data.map((item) => ({
       skill: item.name,
       years: item.years,
@@ -929,7 +940,10 @@ const SkillStackChart = React.memo(
 
     // 가장 긴 막대의 값을 찾아서 domain을 조정하여 우측 여백 생성
     const maxValue = Math.max(...chartData.map((d) => d.years));
-    const domainMax = maxValue * 1.18;
+    // 모바일에서는 더 큰 여백을 위해 domain을 더 크게 설정
+    const domainMax = isMobile ? maxValue * 1.35 : maxValue * 1.18;
+    // 모바일에서는 margin도 더 크게 설정
+    const rightMargin = isMobile ? 24 : 16;
 
     // 스킬 개수에 따라 높이 동적 계산 (각 막대 20px, 최소 60px)
     const skillCount = chartData.length;
@@ -950,7 +964,7 @@ const SkillStackChart = React.memo(
             barCategoryGap={2}
             height={calculatedHeight}
             margin={{
-              right: 16,
+              right: rightMargin,
               top: 2,
               bottom: 2,
             }}
@@ -1359,8 +1373,8 @@ const ExperienceCard = React.memo(
                 placeholder="예: Python Backend, Python Chapter Lead"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="w-full">
                 <label
                   htmlFor={`${itemId}_시작일`}
                   className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
@@ -1376,9 +1390,10 @@ const ExperienceCard = React.memo(
                     onInputChange(`${itemId}_시작일`, e.target.value)
                   }
                   placeholder="예: 2019-01"
+                  className="w-full"
                 />
               </div>
-              <div>
+              <div className="w-full">
                 <label
                   htmlFor={`${itemId}_종료일`}
                   className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
@@ -1394,6 +1409,7 @@ const ExperienceCard = React.memo(
                     onInputChange(`${itemId}_종료일`, e.target.value)
                   }
                   placeholder="예: 2024-01 또는 현재"
+                  className="w-full"
                 />
               </div>
             </div>
@@ -1529,8 +1545,8 @@ const SideProjectCard = React.memo(
                 placeholder="프로젝트명을 입력하세요"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="w-full">
                 <label
                   htmlFor={`${itemId}_시작일`}
                   className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
@@ -1546,9 +1562,10 @@ const SideProjectCard = React.memo(
                     onInputChange(`${itemId}_시작일`, e.target.value)
                   }
                   placeholder="예: 2023-01"
+                  className="w-full"
                 />
               </div>
-              <div>
+              <div className="w-full">
                 <label
                   htmlFor={`${itemId}_종료일`}
                   className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
@@ -1564,6 +1581,7 @@ const SideProjectCard = React.memo(
                     onInputChange(`${itemId}_종료일`, e.target.value)
                   }
                   placeholder="예: 2023-06 또는 현재"
+                  className="w-full"
                 />
               </div>
             </div>
@@ -1733,8 +1751,8 @@ const EducationCard = React.memo(
                 placeholder="전공을 입력하세요"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="w-full">
                 <label
                   htmlFor={`${itemId}_시작일`}
                   className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
@@ -1750,9 +1768,10 @@ const EducationCard = React.memo(
                     onInputChange(`${itemId}_시작일`, e.target.value)
                   }
                   placeholder="예: 2018-04"
+                  className="w-full"
                 />
               </div>
-              <div>
+              <div className="w-full">
                 <label
                   htmlFor={`${itemId}_종료일`}
                   className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
@@ -1768,6 +1787,7 @@ const EducationCard = React.memo(
                     onInputChange(`${itemId}_종료일`, e.target.value)
                   }
                   placeholder="예: 2018-05"
+                  className="w-full"
                 />
               </div>
             </div>
@@ -2896,7 +2916,8 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
             name={field}
             value={formData[field] || ""}
             onChange={(e) => handleInputChange(field, e.target.value)}
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            style={{ minWidth: "200px" }}
           >
             <option value="">수준을 선택하세요</option>
             <option value="Native">Native - 모국어와 동일 수준</option>
@@ -3062,46 +3083,48 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
     ].filter((item) => item.selected);
 
     return (
-      <div className="max-w-3xl mx-auto text-gray-900 dark:text-gray-100">
+      <div className="max-w-3xl mx-auto text-gray-900 dark:text-gray-100 px-4 sm:px-6">
         {/* 헤더: 사진, 이름/Role과 소셜 아이콘 */}
-        <div className="flex items-start justify-between mb-8">
-          <div className="flex-1">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6 mb-6 sm:mb-8">
+          <div className="flex-1 flex flex-col sm:flex-row items-start gap-4 sm:gap-6">
             {/* 사진 표시 */}
             {selectedFields["사진"] && (
-              <div className="mb-6">
+              <div className="mb-0 sm:mb-6">
                 {formData["사진"] ? (
                   <img
                     src={formData["사진"]}
                     alt="프로필 사진"
-                    className="w-32 h-32 rounded-full object-cover border-4 border-gray-300 dark:border-gray-600 shadow-lg"
+                    className="w-24 h-24 sm:w-32 sm:h-32 rounded-full object-cover border-4 border-gray-300 dark:border-gray-600 shadow-lg shrink-0"
                   />
                 ) : (
-                  <div className="w-32 h-32 rounded-full border-4 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center bg-gray-100 dark:bg-gray-800">
-                    <span className="text-gray-400 dark:text-gray-500 text-sm italic">
+                  <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center bg-gray-100 dark:bg-gray-800 shrink-0">
+                    <span className="text-gray-400 dark:text-gray-500 text-xs sm:text-sm italic">
                       사진
                     </span>
                   </div>
                 )}
               </div>
             )}
-            {selectedFields["이름"] && (
-              <h1
-                className={`text-5xl font-bold mb-3 ${!formData["이름"] ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-900 dark:text-gray-100"}`}
-              >
-                {getDisplayValue("이름", formData["이름"])}
-              </h1>
-            )}
-            {selectedFields["Role"] && (
-              <h2
-                className={`text-2xl font-normal ${!formData["Role"] ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-600 dark:text-gray-400"}`}
-              >
-                {getDisplayValue("Role", formData["Role"])}
-              </h2>
-            )}
+            <div className="flex-1">
+              {selectedFields["이름"] && (
+                <h1
+                  className={`text-3xl sm:text-4xl md:text-5xl font-bold mb-2 sm:mb-3 ${!formData["이름"] ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-900 dark:text-gray-100"}`}
+                >
+                  {getDisplayValue("이름", formData["이름"])}
+                </h1>
+              )}
+              {selectedFields["Role"] && (
+                <h2
+                  className={`text-xl sm:text-2xl font-normal ${!formData["Role"] ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-600 dark:text-gray-400"}`}
+                >
+                  {getDisplayValue("Role", formData["Role"])}
+                </h2>
+              )}
+            </div>
           </div>
 
           {/* 오른쪽: 소셜 미디어 아이콘들과 연락처 정보 */}
-          <div className="flex flex-col items-end gap-4">
+          <div className="flex flex-col items-start sm:items-end gap-4 w-full sm:w-auto">
             {/* 소셜 미디어 아이콘들 */}
             {socialLinks.length > 0 && (
               <div className="flex items-center gap-3">
@@ -3127,7 +3150,7 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
 
             {/* 연락처 정보 (Email, Web, Phone) */}
             {contactInfo.length > 0 && (
-              <div className="space-y-1 text-sm text-right">
+              <div className="space-y-1 text-xs sm:text-sm text-left sm:text-right w-full sm:w-auto">
                 {contactInfo.map(({ key, label, value, isLink, href }) => {
                   const displayValue = getDisplayValue(key, value);
                   const isEmpty = !value;
@@ -3216,10 +3239,10 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
 
         {/* About Me */}
         {selectedFields["Introduce"] && (
-          <section className="mb-10">
-            <hr className="border-gray-300 dark:border-gray-600 mb-6" />
+          <section className="mb-6 sm:mb-10">
+            <hr className="border-gray-300 dark:border-gray-600 mb-4 sm:mb-6" />
             <div
-              className={`text-base leading-relaxed whitespace-pre-line ${!formData["Introduce"] ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
+              className={`text-sm sm:text-base leading-relaxed whitespace-pre-line ${!formData["Introduce"] ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
             >
               {getDisplayValue("Introduce", formData["Introduce"])}
             </div>
@@ -3235,9 +3258,9 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
           if (experienceFields.length === 0) return null;
 
           return (
-            <section className="mb-10">
-              <hr className="border-gray-300 dark:border-gray-600 mb-4" />
-              <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
+            <section className="mb-6 sm:mb-10">
+              <hr className="border-gray-300 dark:border-gray-600 mb-3 sm:mb-4" />
+              <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-gray-900 dark:text-gray-100">
                 Experience
               </h2>
               {experienceFields.map((field) => {
@@ -3289,32 +3312,33 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
                 const period = formatPeriod();
 
                 return (
-                  <div key={field} className="mb-10">
-                    <hr className="border-gray-300 dark:border-gray-600 mb-6" />
+                  <div key={field} className="mb-6 sm:mb-10">
+                    <hr className="border-gray-300 dark:border-gray-600 mb-4 sm:mb-6" />
                     <h3
-                      className={`text-2xl font-bold mb-2 ${!company ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-900 dark:text-gray-100"}`}
+                      className={`text-xl sm:text-2xl font-bold mb-2 ${!company ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-900 dark:text-gray-100"}`}
                     >
                       {getDisplayValue("회사명", company)}
                     </h3>
-                    <div className="mb-2">
-                      {role ? (
+                    {role ? (
+                      <div className="mb-2 text-sm sm:text-base">
                         <span
                           className={`font-bold ${!role ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-900 dark:text-gray-100"}`}
                         >
                           {getDisplayValue("Role", role)}
                         </span>
-                      ) : (
+                      </div>
+                    ) : (
+                      <div className="mb-2 text-sm sm:text-base">
                         <span className="text-gray-400 dark:text-gray-500 italic font-bold">
                           {getPlaceholder("Role")}
                         </span>
-                      )}
-                      {(role || period) && <span className="mx-2">•</span>}
-                      {period && (
-                        <span className="text-gray-700 dark:text-gray-300">
-                          {period.display}
-                        </span>
-                      )}
-                    </div>
+                      </div>
+                    )}
+                    {period && (
+                      <div className="mb-2 text-sm sm:text-base text-gray-700 dark:text-gray-300">
+                        {period.display}
+                      </div>
+                    )}
                     {skills && (
                       <div className="flex flex-wrap gap-2 mb-2">
                         {skills
@@ -3329,7 +3353,11 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
                             ] as const;
                             const variant = variants[idx % variants.length];
                             return (
-                              <Badge key={idx} variant={variant}>
+                              <Badge
+                                key={idx}
+                                variant={variant}
+                                className="text-xs"
+                              >
                                 {skill}
                               </Badge>
                             );
@@ -3337,7 +3365,7 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
                       </div>
                     )}
                     <div
-                      className={`text-base leading-relaxed whitespace-pre-line mb-4 ${!description ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
+                      className={`text-sm sm:text-base leading-relaxed whitespace-pre-line mb-4 ${!description ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
                     >
                       {getDisplayValue("작업내용", description)}
                     </div>
@@ -3357,9 +3385,9 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
           if (sideProjectFields.length === 0) return null;
 
           return (
-            <section className="mb-10">
-              <hr className="border-gray-300 dark:border-gray-600 mb-4" />
-              <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
+            <section className="mb-6 sm:mb-10">
+              <hr className="border-gray-300 dark:border-gray-600 mb-3 sm:mb-4" />
+              <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-gray-900 dark:text-gray-100">
                 Side Project
               </h2>
               {sideProjectFields.map((field) => {
@@ -3411,15 +3439,15 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
                 const period = formatPeriod();
 
                 return (
-                  <div key={field} className="mb-10">
-                    <hr className="border-gray-300 dark:border-gray-600 mb-6" />
+                  <div key={field} className="mb-6 sm:mb-10">
+                    <hr className="border-gray-300 dark:border-gray-600 mb-4 sm:mb-6" />
                     <h3
-                      className={`text-2xl font-bold mb-2 ${!projectName ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-900 dark:text-gray-100"}`}
+                      className={`text-xl sm:text-2xl font-bold mb-2 ${!projectName ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-900 dark:text-gray-100"}`}
                     >
                       {getDisplayValue("프로젝트명", projectName)}
                     </h3>
                     {period && (
-                      <div className="mb-2 text-gray-700 dark:text-gray-300">
+                      <div className="mb-2 text-sm sm:text-base text-gray-700 dark:text-gray-300">
                         {period.display}
                       </div>
                     )}
@@ -3429,7 +3457,7 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
                           href={normalizeUrl(link)}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-blue-600 dark:text-blue-400 hover:underline"
+                          className="text-sm sm:text-base text-blue-600 dark:text-blue-400 hover:underline break-all"
                         >
                           {link}
                         </a>
@@ -3449,7 +3477,11 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
                             ] as const;
                             const variant = variants[idx % variants.length];
                             return (
-                              <Badge key={idx} variant={variant}>
+                              <Badge
+                                key={idx}
+                                variant={variant}
+                                className="text-xs"
+                              >
                                 {skill}
                               </Badge>
                             );
@@ -3457,7 +3489,7 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
                       </div>
                     )}
                     <div
-                      className={`text-base leading-relaxed whitespace-pre-line mb-4 ${!description ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
+                      className={`text-sm sm:text-base leading-relaxed whitespace-pre-line mb-4 ${!description ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
                     >
                       {getDisplayValue("주요작업", description)}
                     </div>
@@ -3477,9 +3509,9 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
           if (educationFields.length === 0) return null;
 
           return (
-            <section className="mb-10">
-              <hr className="border-gray-300 dark:border-gray-600 mb-4" />
-              <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
+            <section className="mb-6 sm:mb-10">
+              <hr className="border-gray-300 dark:border-gray-600 mb-3 sm:mb-4" />
+              <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-gray-900 dark:text-gray-100">
                 Education
               </h2>
               {educationFields.map((field) => {
@@ -3530,27 +3562,27 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
                 const period = formatPeriod();
 
                 return (
-                  <div key={field} className="mb-10">
-                    <hr className="border-gray-300 dark:border-gray-600 mb-6" />
+                  <div key={field} className="mb-6 sm:mb-10">
+                    <hr className="border-gray-300 dark:border-gray-600 mb-4 sm:mb-6" />
                     <h3
-                      className={`text-2xl font-bold mb-2 ${!institution ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-900 dark:text-gray-100"}`}
+                      className={`text-xl sm:text-2xl font-bold mb-2 ${!institution ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-900 dark:text-gray-100"}`}
                     >
                       {getDisplayValue("기관명", institution)}
                     </h3>
                     <div
-                      className={`mb-2 ${!major ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
+                      className={`mb-2 text-sm sm:text-base ${!major ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
                     >
                       {getDisplayValue("전공", major)}
                     </div>
                     {period && (
                       <div
-                        className={`mb-2 ${!startDate || !endDate ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
+                        className={`mb-2 text-sm sm:text-base ${!startDate || !endDate ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
                       >
                         {period.display}
                       </div>
                     )}
                     <div
-                      className={`text-base leading-relaxed whitespace-pre-line mb-4 ${!description ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
+                      className={`text-sm sm:text-base leading-relaxed whitespace-pre-line mb-4 ${!description ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
                     >
                       {getDisplayValue("내용", description)}
                     </div>
@@ -3570,9 +3602,9 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
           if (certificationFields.length === 0) return null;
 
           return (
-            <section className="mb-10">
-              <hr className="border-gray-300 dark:border-gray-600 mb-4" />
-              <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
+            <section className="mb-6 sm:mb-10">
+              <hr className="border-gray-300 dark:border-gray-600 mb-3 sm:mb-4" />
+              <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-gray-900 dark:text-gray-100">
                 자격증
               </h2>
               {certificationFields.map((field) => {
@@ -3590,20 +3622,20 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
                 const acquisitionDateFormatted = formatAcquisitionDate();
 
                 return (
-                  <div key={field} className="mb-10">
-                    <hr className="border-gray-300 dark:border-gray-600 mb-6" />
+                  <div key={field} className="mb-6 sm:mb-10">
+                    <hr className="border-gray-300 dark:border-gray-600 mb-4 sm:mb-6" />
                     <h3
-                      className={`text-2xl font-bold mb-2 ${!certificationName ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-900 dark:text-gray-100"}`}
+                      className={`text-xl sm:text-2xl font-bold mb-2 ${!certificationName ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-900 dark:text-gray-100"}`}
                     >
                       {getDisplayValue("자격증명", certificationName)}
                     </h3>
                     <div
-                      className={`mb-2 ${!issuer ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
+                      className={`mb-2 text-sm sm:text-base ${!issuer ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
                     >
                       {getDisplayValue("발급기관", issuer)}
                     </div>
                     {acquisitionDateFormatted && (
-                      <div className="mb-2 text-gray-700 dark:text-gray-300">
+                      <div className="mb-2 text-sm sm:text-base text-gray-700 dark:text-gray-300">
                         {acquisitionDateFormatted}
                       </div>
                     )}
@@ -3623,9 +3655,9 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
           if (languageTestFields.length === 0) return null;
 
           return (
-            <section className="mb-10">
-              <hr className="border-gray-300 dark:border-gray-600 mb-4" />
-              <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
+            <section className="mb-6 sm:mb-10">
+              <hr className="border-gray-300 dark:border-gray-600 mb-3 sm:mb-4" />
+              <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-gray-900 dark:text-gray-100">
                 어학 성적
               </h2>
               {languageTestFields.map((field) => {
@@ -3643,21 +3675,21 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
                 const testDateFormatted = formatTestDate();
 
                 return (
-                  <div key={field} className="mb-10">
-                    <hr className="border-gray-300 dark:border-gray-600 mb-6" />
+                  <div key={field} className="mb-6 sm:mb-10">
+                    <hr className="border-gray-300 dark:border-gray-600 mb-4 sm:mb-6" />
                     <h3
-                      className={`text-2xl font-bold mb-2 ${!testName ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-900 dark:text-gray-100"}`}
+                      className={`text-xl sm:text-2xl font-bold mb-2 ${!testName ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-900 dark:text-gray-100"}`}
                     >
                       {getDisplayValue("시험명", testName)}
                     </h3>
                     <div className="mb-2">
                       <span
-                        className={`text-lg ${!score ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
+                        className={`text-base sm:text-lg ${!score ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
                       >
                         {getDisplayValue("점수", score)}
                       </span>
                       {testDateFormatted && (
-                        <span className="text-gray-700 dark:text-gray-300 ml-4">
+                        <span className="text-sm sm:text-base text-gray-700 dark:text-gray-300 ml-2 sm:ml-4">
                           ({testDateFormatted})
                         </span>
                       )}
@@ -3678,9 +3710,9 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
           if (etcFields.length === 0) return null;
 
           return (
-            <section className="mb-10">
-              <hr className="border-gray-300 dark:border-gray-600 mb-4" />
-              <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
+            <section className="mb-6 sm:mb-10">
+              <hr className="border-gray-300 dark:border-gray-600 mb-3 sm:mb-4" />
+              <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-gray-900 dark:text-gray-100">
                 그 외 활동
               </h2>
               {etcFields.map((field) => {
@@ -3689,17 +3721,17 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
                 const content = formData[`${field}_내용`];
 
                 return (
-                  <div key={field} className="mb-10">
-                    <hr className="border-gray-300 dark:border-gray-600 mb-6" />
+                  <div key={field} className="mb-6 sm:mb-10">
+                    <hr className="border-gray-300 dark:border-gray-600 mb-4 sm:mb-6" />
                     <h3
-                      className={`text-2xl font-bold mb-2 ${!activityName ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-900 dark:text-gray-100"}`}
+                      className={`text-xl sm:text-2xl font-bold mb-2 ${!activityName ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-900 dark:text-gray-100"}`}
                     >
                       {link && activityName ? (
                         <a
                           href={link}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-blue-600 dark:text-blue-400 hover:underline"
+                          className="text-blue-600 dark:text-blue-400 hover:underline break-all"
                         >
                           {getDisplayValue("활동명", activityName)}
                         </a>
@@ -3708,7 +3740,7 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
                       )}
                     </h3>
                     <div
-                      className={`text-base leading-relaxed whitespace-pre-line mb-4 ${!content ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
+                      className={`text-sm sm:text-base leading-relaxed whitespace-pre-line mb-4 ${!content ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
                     >
                       {getDisplayValue("내용", content)}
                     </div>
@@ -3817,12 +3849,12 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
             if (topSkills.length === 0) return null;
 
             return (
-              <section className="mb-10">
-                <hr className="border-gray-300 dark:border-gray-600 mb-4" />
-                <h2 className="text-2xl font-bold mb-2 text-gray-900 dark:text-gray-100">
+              <section className="mb-6 sm:mb-10">
+                <hr className="border-gray-300 dark:border-gray-600 mb-3 sm:mb-4" />
+                <h2 className="text-xl sm:text-2xl font-bold mb-2 text-gray-900 dark:text-gray-100">
                   스킬 스택 그래프
                 </h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-4 sm:mb-6">
                   사용 기간이 가장 긴 6개의 스킬만 표시됩니다
                 </p>
                 <div className="w-full">
@@ -3853,12 +3885,12 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
             if (categoryFields.length === 0) return null;
 
             return (
-              <section key={category} className="mb-10">
-                <hr className="border-gray-300 dark:border-gray-600 mb-4" />
-                <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-gray-100">
+              <section key={category} className="mb-6 sm:mb-10">
+                <hr className="border-gray-300 dark:border-gray-600 mb-3 sm:mb-4" />
+                <h2 className="text-xl sm:text-2xl font-bold mb-3 sm:mb-4 text-gray-900 dark:text-gray-100">
                   {category}
                 </h2>
-                <div className="space-y-2 text-base">
+                <div className="space-y-2 text-sm sm:text-base">
                   {categoryFields.map((field) => {
                     const value = formData[field];
                     return (
@@ -3884,7 +3916,7 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
       collisionDetection={closestCenter}
       onDragEnd={handleDragEnd}
     >
-      <SidebarProvider defaultOpen={true}>
+      <SidebarProvider defaultOpen={false}>
         <div className="flex h-screen w-full overflow-hidden">
           <Sidebar className="border-r border-sidebar-border bg-white">
             <SidebarContent>

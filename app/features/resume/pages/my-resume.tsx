@@ -86,39 +86,52 @@ export default function MyResume({ loaderData }: Route.ComponentProps) {
     <div className="min-h-screen bg-gray-900">
       {/* Header */}
       <div className="border-b border-gray-700 bg-gray-900">
-        <div className="container mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+        <div className="container mx-auto px-4 py-4 sm:py-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-center gap-2 sm:gap-4">
               <Link
                 to="/"
-                className="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-gray-800/50 transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95 cursor-pointer"
+                className="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-lg hover:bg-gray-800/50 transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95 cursor-pointer shrink-0"
               >
-                <img src="/icon.png" alt="Beacon Port" className="w-8 h-8" />
+                <img
+                  src="/icon.png"
+                  alt="Beacon Port"
+                  className="w-6 h-6 sm:w-8 sm:h-8"
+                />
               </Link>
-              <h1 className="text-3xl font-bold text-white">나의 이력서</h1>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white whitespace-nowrap">
+                나의 이력서
+              </h1>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
               <Button
                 onClick={handleAddResume}
-                className="gap-2 text-white cursor-pointer hover:opacity-90 transition-opacity"
+                size="sm"
+                className="gap-1 sm:gap-2 text-white cursor-pointer hover:opacity-90 transition-opacity text-xs sm:text-sm"
               >
-                <Plus className="h-4 w-4" />
-                이력서 추가
+                <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">이력서 추가</span>
+                <span className="sm:hidden">추가</span>
               </Button>
               <Button
                 onClick={handleProfile}
                 variant="outline"
-                className="gap-2 text-white border-gray-600 hover:bg-gray-800 hover:text-white hover:border-gray-500 cursor-pointer transition-all"
+                size="sm"
+                className="gap-1 sm:gap-2 text-white border-gray-600 hover:bg-gray-800 hover:text-white hover:border-gray-500 cursor-pointer transition-all text-xs sm:text-sm"
               >
-                <User className="h-4 w-4" />내 정보
+                <User className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">내 정보</span>
+                <span className="sm:hidden">정보</span>
               </Button>
               <Button
                 onClick={handleLogout}
                 variant="outline"
-                className="gap-2 text-white border-gray-600 hover:bg-gray-800 hover:text-white hover:border-gray-500 cursor-pointer transition-all"
+                size="sm"
+                className="gap-1 sm:gap-2 text-white border-gray-600 hover:bg-gray-800 hover:text-white hover:border-gray-500 cursor-pointer transition-all text-xs sm:text-sm"
               >
-                <LogOut className="h-4 w-4" />
-                로그아웃
+                <LogOut className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">로그아웃</span>
+                <span className="sm:hidden">로그아웃</span>
               </Button>
             </div>
           </div>

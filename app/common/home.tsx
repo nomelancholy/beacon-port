@@ -75,11 +75,11 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       {/* Content Section - Below Image */}
       <div className="flex min-h-screen flex-col items-center justify-center bg-gray-900 px-4 py-4 md:py-8 lg:py-10">
         {/* Text Section */}
-        <div className="mb-2 md:mb-4 text-center">
-          <h1 className="mb-2 md:mb-4 text-4xl font-bold text-white md:text-5xl lg:text-6xl">
+        <div className="mb-2 md:mb-4 text-center px-2">
+          <h1 className="mb-2 md:mb-4 text-2xl font-bold text-white sm:text-3xl md:text-5xl lg:text-6xl whitespace-nowrap">
             인재의 신호가 모이는 곳
           </h1>
-          <p className="text-xl text-white/90 md:text-2xl lg:text-3xl">
+          <p className="text-base text-white/90 sm:text-lg md:text-2xl lg:text-3xl">
             지금 당신의 Beacon을 켜세요
           </p>
         </div>

@@ -46,6 +46,18 @@ const SidebarProvider = React.forwardRef<
 >(({ defaultOpen = true, open: openProp, onOpenChange, className, style, children, ...props }, ref) => {
   const [openMobile, setOpenMobile] = React.useState(false);
   const [open, setOpenState] = React.useState(defaultOpen);
+  const [isMobile, setIsMobile] = React.useState(false);
+
+  // 모바일 감지
+  React.useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768); // md breakpoint
+    };
+    
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   const openState = openProp ?? open;
   const setOpen = React.useCallback(
@@ -60,12 +72,15 @@ const SidebarProvider = React.forwardRef<
     [onOpenChange, openState]
   );
 
-  const isMobile = React.useState(false)[0];
   const state = openState ? "expanded" : "collapsed";
 
   const toggleSidebar = React.useCallback(() => {
-    return setOpen((open) => !open);
-  }, [setOpen]);
+    if (isMobile) {
+      setOpenMobile((open) => !open);
+    } else {
+      return setOpen((open) => !open);
+    }
+  }, [setOpen, isMobile]);
 
   const value = React.useMemo<SidebarContext>(
     () => ({
@@ -134,23 +149,33 @@ const Sidebar = React.forwardRef<
 
   if (isMobile) {
     return (
-      <div
-        className={cn(
-          "group peer fixed inset-y-0 z-50 h-svh w-full border-r transition-transform duration-200 ease-linear data-[state=collapsed]:-translate-x-full",
-          side === "right" && "right-0 border-l border-r-0 data-[state=collapsed]:translate-x-full",
-          className
+      <>
+        {/* 배경 오버레이 */}
+        {openMobile && (
+          <div
+            className="fixed inset-0 z-40 bg-black/50 transition-opacity"
+            onClick={() => setOpenMobile(false)}
+            aria-hidden="true"
+          />
         )}
-        style={{
-          backgroundColor: "hsl(var(--sidebar))",
-          color: "hsl(var(--sidebar-foreground))",
-          borderColor: "hsl(var(--sidebar-border))",
-        }}
-        data-state={openMobile ? "expanded" : "collapsed"}
-        ref={ref}
-        {...props}
-      >
-        {children}
-      </div>
+        <div
+          className={cn(
+            "group peer fixed inset-y-0 z-50 h-svh w-[--sidebar-width-mobile] max-w-[80vw] border-r transition-transform duration-200 ease-linear data-[state=collapsed]:-translate-x-full",
+            side === "right" && "right-0 border-l border-r-0 data-[state=collapsed]:translate-x-full",
+            className
+          )}
+          style={{
+            backgroundColor: "hsl(var(--sidebar))",
+            color: "hsl(var(--sidebar-foreground))",
+            borderColor: "hsl(var(--sidebar-border))",
+          }}
+          data-state={openMobile ? "expanded" : "collapsed"}
+          ref={ref}
+          {...props}
+        >
+          {children}
+        </div>
+      </>
     );
   }
 

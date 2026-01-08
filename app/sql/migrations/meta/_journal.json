@@ -57,6 +57,13 @@
       "when": 1767867794005,
       "tag": "0007_grey_mesmero",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1767874126080,
+      "tag": "0008_futuristic_namora",
+      "breakpoints": true
     }
   ]
 }

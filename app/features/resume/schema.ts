@@ -137,6 +137,53 @@ export const educations = pgTable(
   (table) => sharedSubTableConfig(table)
 );
 
+// --- [ 1. Certifications ] ---
+export const certifications = pgTable(
+  "certifications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    resumeId: uuid("resume_id").references(() => resumesWithRLS.id, {
+      onDelete: "cascade",
+    }),
+    name: text("name").notNull(),
+    issuer: text("issuer").notNull(),
+    acquisitionDate: timestamp("acquisition_date").notNull(),
+    displayOrder: integer("display_order").notNull().default(0),
+  },
+  (table) => sharedSubTableConfig(table)
+);
+
+// --- [ 2. Language Tests ] ---
+export const languageTests = pgTable(
+  "language_tests",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    resumeId: uuid("resume_id").references(() => resumesWithRLS.id, {
+      onDelete: "cascade",
+    }),
+    name: text("name").notNull(),
+    score: text("score").notNull(),
+    testDate: timestamp("test_date").notNull(),
+    displayOrder: integer("display_order").notNull().default(0),
+  },
+  (table) => sharedSubTableConfig(table)
+);
+
+// --- [ 3. ETCs ] ---
+export const etcs = pgTable(
+  "etcs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    resumeId: uuid("resume_id").references(() => resumesWithRLS.id, {
+      onDelete: "cascade",
+    }),
+    name: text("name").notNull(),
+    link: text("link"),
+    description: text("description"),
+    displayOrder: integer("display_order").notNull().default(0),
+  },
+  (table) => sharedSubTableConfig(table)
+);
 // --- [ 4. Skills & Aliases (소문자 제약 포함) ] ---
 export const skills = pgTable(
   "skills",

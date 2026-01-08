@@ -13,6 +13,8 @@ import {
   Share2,
   Printer,
   Trash2,
+  AlertCircle,
+  Home,
 } from "lucide-react";
 import { Button } from "../../../components/ui/button";
 import { Badge } from "../../../components/ui/badge";
@@ -83,13 +85,20 @@ export const loader = async ({ params, request }: Route.LoaderArgs) => {
       data: { user },
     } = await supabase.auth.getUser();
 
-    if (!user) {
-      throw new Response("이력서를 조회할 권한이 없습니다", { status: 403 });
-    }
-
-    // 소유자 확인
-    if (resumeInfo.user_id !== user.id) {
-      throw new Response("이력서를 조회할 권한이 없습니다", { status: 403 });
+    if (!user || resumeInfo.user_id !== user.id) {
+      // 에러를 던지지 않고 특별한 플래그 반환
+      return {
+        isPrivateResume: true,
+        message:
+          "이력서가 비공개 상태입니다. 이력서 주인에게 공개 전환을 요청하세요.",
+        resume: null,
+        experiences: [],
+        sideProjects: [],
+        educations: [],
+        certifications: [],
+        languageTests: [],
+        etcs: [],
+      };
     }
   }
 
@@ -309,6 +318,17 @@ const SkillStackChart = React.memo(
   }: {
     data: Array<{ name: string; years: number; displayText: string }>;
   }) => {
+    const [isMobile, setIsMobile] = React.useState(false);
+
+    React.useEffect(() => {
+      const checkMobile = () => {
+        setIsMobile(window.innerWidth < 640);
+      };
+      checkMobile();
+      window.addEventListener("resize", checkMobile);
+      return () => window.removeEventListener("resize", checkMobile);
+    }, []);
+
     const chartData = data.map((item) => ({
       skill: item.name,
       years: item.years,
@@ -327,7 +347,10 @@ const SkillStackChart = React.memo(
 
     // 가장 긴 막대의 값을 찾아서 domain을 조정하여 우측 여백 생성
     const maxValue = Math.max(...chartData.map((d) => d.years));
-    const domainMax = maxValue * 1.18;
+    // 모바일에서는 더 큰 여백을 위해 domain을 더 크게 설정
+    const domainMax = isMobile ? maxValue * 1.35 : maxValue * 1.18;
+    // 모바일에서는 margin도 더 크게 설정
+    const rightMargin = isMobile ? 24 : 16;
 
     // 스킬 개수에 따라 높이 동적 계산 (각 막대 20px, 최소 60px)
     const skillCount = chartData.length;
@@ -348,7 +371,7 @@ const SkillStackChart = React.memo(
             barCategoryGap={2}
             height={calculatedHeight}
             margin={{
-              right: 16,
+              right: rightMargin,
               top: 2,
               bottom: 2,
             }}
@@ -396,6 +419,46 @@ SkillStackChart.displayName = "SkillStackChart";
 
 export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
   if (!loaderData) return null;
+
+  // 비공개 이력서인 경우 에러 메시지 표시
+  if ("isPrivateResume" in loaderData && loaderData.isPrivateResume) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4">
+        <div className="max-w-md w-full bg-gray-800 rounded-lg shadow-xl p-8 text-center">
+          <div className="flex justify-center mb-4">
+            <AlertCircle className="h-16 w-16 text-red-500" />
+          </div>
+          <h1 className="text-2xl font-bold text-white mb-2">
+            접근 권한이 없습니다
+          </h1>
+          <p className="text-gray-400 mb-6">
+            {("message" in loaderData ? loaderData.message : null) ||
+              "이력서가 비공개 상태입니다. 이력서 주인에게 공개 전환을 요청하세요."}
+          </p>
+          <div className="flex gap-3 justify-center">
+            <Button
+              asChild
+              variant="outline"
+              className="text-white border-gray-600 hover:bg-gray-700"
+            >
+              <Link to="/">
+                <Home className="h-4 w-4 mr-2" />
+                홈으로
+              </Link>
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => window.location.reload()}
+              className="text-white border-gray-600 hover:bg-gray-700"
+            >
+              새로고침
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const {
     resume,
     experiences,
@@ -614,29 +677,37 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
     <div className="min-h-screen bg-gray-900">
       {/* Header */}
       <div className="border-b border-gray-700 bg-gray-900 no-print">
-        <div className="container mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+        <div className="container mx-auto px-4 py-4 sm:py-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-center gap-2 sm:gap-4">
               <Link
                 to="/"
-                className="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-gray-800/50 transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95 cursor-pointer"
+                className="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-lg hover:bg-gray-800/50 transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95 cursor-pointer shrink-0"
               >
-                <img src="/icon.png" alt="Beacon Port" className="w-8 h-8" />
+                <img
+                  src="/icon.png"
+                  alt="Beacon Port"
+                  className="w-6 h-6 sm:w-8 sm:h-8"
+                />
               </Link>
               <Button
                 variant="ghost"
                 onClick={() => navigate("/my-resume")}
-                className="group text-white hover:text-white/90 hover:bg-gray-800/50 transition-all duration-200 ease-in-out transform hover:scale-105 cursor-pointer"
+                size="sm"
+                className="group text-white hover:text-white/90 hover:bg-gray-800/50 transition-all duration-200 ease-in-out transform hover:scale-105 cursor-pointer text-xs sm:text-sm"
               >
-                <ArrowLeft className="h-4 w-4 mr-2 transition-transform duration-200 group-hover:-translate-x-1" />
-                목록으로
+                <ArrowLeft className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 transition-transform duration-200 group-hover:-translate-x-1" />
+                <span className="hidden sm:inline">목록으로</span>
+                <span className="sm:hidden">목록</span>
               </Button>
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-white whitespace-nowrap truncate">
+                {resume.title}
+              </h1>
             </div>
-            <h1 className="text-2xl font-bold text-white">{resume.title}</h1>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
               {/* 공개/비공개 스위치 */}
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-gray-600 bg-gray-800/50">
-                <span className="text-sm text-white/80">비공개</span>
+              <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-md border border-gray-600 bg-gray-800/50">
+                <span className="text-xs sm:text-sm text-white/80">비공개</span>
                 <button
                   type="button"
                   role="switch"
@@ -644,65 +715,76 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
                   disabled={fetcher.state === "submitting"}
                   onClick={() => handlePublicToggle(!isPublic)}
                   className={cn(
-                    "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer",
+                    "relative inline-flex h-5 w-9 sm:h-6 sm:w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer",
                     isPublic ? "bg-green-600" : "bg-gray-600"
                   )}
                 >
                   {fetcher.state === "submitting" ? (
-                    <Loader2 className="absolute left-1 h-4 w-4 animate-spin text-white" />
+                    <Loader2 className="absolute left-0.5 sm:left-1 h-3 w-3 sm:h-4 sm:w-4 animate-spin text-white" />
                   ) : (
                     <span
                       className={cn(
-                        "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
-                        isPublic ? "translate-x-6" : "translate-x-1"
+                        "inline-block h-3 w-3 sm:h-4 sm:w-4 transform rounded-full bg-white transition-transform",
+                        isPublic
+                          ? "translate-x-5 sm:translate-x-6"
+                          : "translate-x-1"
                       )}
                     />
                   )}
                 </button>
-                <span className="text-sm text-white/80">공개</span>
+                <span className="text-xs sm:text-sm text-white/80">공개</span>
               </div>
 
               <Button
                 variant="outline"
                 onClick={handleEdit}
-                className="group text-white border-gray-600 hover:bg-gray-800 hover:text-white hover:border-gray-500 transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95 cursor-pointer"
+                size="sm"
+                className="group text-white border-gray-600 hover:bg-gray-800 hover:text-white hover:border-gray-500 transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95 cursor-pointer text-xs sm:text-sm"
               >
-                <Edit className="h-4 w-4 mr-2 transition-transform duration-200 group-hover:rotate-12" />
-                수정
+                <Edit className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 transition-transform duration-200 group-hover:rotate-12" />
+                <span className="hidden sm:inline">수정</span>
+                <span className="sm:hidden">수정</span>
               </Button>
               <Button
                 variant="outline"
                 onClick={() => setShowDeleteDialog(true)}
-                className="group text-white border-gray-600 hover:bg-red-600 hover:text-white hover:border-red-600 transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95 cursor-pointer"
+                size="sm"
+                className="group text-white border-gray-600 hover:bg-red-600 hover:text-white hover:border-red-600 transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95 cursor-pointer text-xs sm:text-sm"
                 disabled={fetcher.state === "submitting"}
               >
                 {fetcher.state === "submitting" ? (
                   <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    삭제 중...
+                    <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 animate-spin" />
+                    <span className="hidden sm:inline">삭제 중...</span>
+                    <span className="sm:hidden">삭제 중</span>
                   </>
                 ) : (
                   <>
-                    <Trash2 className="h-4 w-4 mr-2 transition-transform duration-200 group-hover:rotate-12" />
-                    삭제
+                    <Trash2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 transition-transform duration-200 group-hover:rotate-12" />
+                    <span className="hidden sm:inline">삭제</span>
+                    <span className="sm:hidden">삭제</span>
                   </>
                 )}
               </Button>
               <Button
                 variant="outline"
                 onClick={handleShare}
-                className="group text-white border-gray-600 hover:bg-gray-800 hover:text-white hover:border-gray-500 transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95 cursor-pointer"
+                size="sm"
+                className="group text-white border-gray-600 hover:bg-gray-800 hover:text-white hover:border-gray-500 transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95 cursor-pointer text-xs sm:text-sm"
               >
-                <Share2 className="h-4 w-4 mr-2 transition-transform duration-200 group-hover:rotate-12" />
-                공유
+                <Share2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 transition-transform duration-200 group-hover:rotate-12" />
+                <span className="hidden sm:inline">공유</span>
+                <span className="sm:hidden">공유</span>
               </Button>
               <Button
                 variant="outline"
                 onClick={handlePrint}
-                className="group text-white border-gray-600 hover:bg-gray-800 hover:text-white hover:border-gray-500 transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95 cursor-pointer"
+                size="sm"
+                className="group text-white border-gray-600 hover:bg-gray-800 hover:text-white hover:border-gray-500 transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95 cursor-pointer text-xs sm:text-sm"
               >
-                <Printer className="h-4 w-4 mr-2 transition-transform duration-200 group-hover:rotate-12" />
-                출력
+                <Printer className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 transition-transform duration-200 group-hover:rotate-12" />
+                <span className="hidden sm:inline">출력</span>
+                <span className="sm:hidden">출력</span>
               </Button>
             </div>
           </div>
@@ -710,31 +792,31 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
       </div>
 
       {/* Content */}
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-4 sm:py-8">
         <div
           ref={resumeContentRef}
-          className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-12 max-w-3xl mx-auto print:shadow-none print:p-8"
+          className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 sm:p-8 md:p-12 max-w-3xl mx-auto print:shadow-none print:p-8"
         >
           {/* 헤더: 사진, 이름/Role과 소셜 아이콘 */}
-          <div className="flex items-start justify-between mb-8">
-            <div className="flex-1 flex items-start gap-6">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6 mb-6 sm:mb-8">
+            <div className="flex-1 flex flex-col sm:flex-row items-start gap-4 sm:gap-6">
               {/* 사진 표시 */}
               {resume.photo && (
                 <img
                   src={resume.photo}
                   alt="프로필 사진"
-                  className="w-32 h-32 rounded-full object-cover border-4 border-gray-300 dark:border-gray-600 shadow-lg flex-shrink-0"
+                  className="w-24 h-24 sm:w-32 sm:h-32 rounded-full object-cover border-4 border-gray-300 dark:border-gray-600 shadow-lg shrink-0"
                 />
               )}
               <div className="flex-1">
                 <h1
-                  className={`text-5xl font-bold mb-3 ${!resume.name ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-900 dark:text-gray-100"}`}
+                  className={`text-3xl sm:text-4xl md:text-5xl font-bold mb-2 sm:mb-3 ${!resume.name ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-900 dark:text-gray-100"}`}
                 >
                   {getDisplayValue("이름", resume.name)}
                 </h1>
                 {resume.role && (
                   <h2
-                    className={`text-2xl font-normal ${!resume.role ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-600 dark:text-gray-400"}`}
+                    className={`text-xl sm:text-2xl font-normal ${!resume.role ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-600 dark:text-gray-400"}`}
                   >
                     {getDisplayValue("Role", resume.role)}
                   </h2>
@@ -743,7 +825,7 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
             </div>
 
             {/* 오른쪽: 소셜 미디어 아이콘들과 연락처 정보 */}
-            <div className="flex flex-col items-end gap-4">
+            <div className="flex flex-col items-start sm:items-end gap-4 w-full sm:w-auto">
               {/* 소셜 미디어 아이콘들 */}
               {socialLinks.length > 0 && (
                 <div className="flex items-center gap-3">
@@ -764,7 +846,7 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
 
               {/* 연락처 정보 */}
               {contactInfo.length > 0 && (
-                <div className="space-y-1 text-sm text-right">
+                <div className="space-y-1 text-xs sm:text-sm text-left sm:text-right w-full sm:w-auto">
                   {contactInfo.map(({ key, label, value, isLink, href }) => {
                     const displayValue = getDisplayValue(key, value);
                     return (
@@ -814,9 +896,9 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
 
           {/* Introduce */}
           {resume.introduce && (
-            <section className="mb-10">
-              <hr className="border-gray-300 dark:border-gray-600 mb-6" />
-              <div className="text-base leading-relaxed whitespace-pre-line text-gray-700 dark:text-gray-300">
+            <section className="mb-6 sm:mb-10">
+              <hr className="border-gray-300 dark:border-gray-600 mb-4 sm:mb-6" />
+              <div className="text-sm sm:text-base leading-relaxed whitespace-pre-line text-gray-700 dark:text-gray-300">
                 {resume.introduce}
               </div>
             </section>
@@ -824,9 +906,9 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
 
           {/* Experience 섹션 */}
           {experiences.length > 0 && (
-            <section className="mb-10">
-              <hr className="border-gray-300 dark:border-gray-600 mb-4" />
-              <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
+            <section className="mb-6 sm:mb-10">
+              <hr className="border-gray-300 dark:border-gray-600 mb-3 sm:mb-4" />
+              <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-gray-900 dark:text-gray-100">
                 Experience
               </h2>
               {experiences.map((exp: any) => {
@@ -837,26 +919,23 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
                 );
 
                 return (
-                  <div key={exp.id} className="mb-10">
-                    <hr className="border-gray-300 dark:border-gray-600 mb-6" />
-                    <h3 className="text-2xl font-bold mb-2 text-gray-900 dark:text-gray-100">
+                  <div key={exp.id} className="mb-6 sm:mb-10">
+                    <hr className="border-gray-300 dark:border-gray-600 mb-4 sm:mb-6" />
+                    <h3 className="text-xl sm:text-2xl font-bold mb-2 text-gray-900 dark:text-gray-100">
                       {getDisplayValue("회사명", exp.company)}
                     </h3>
-                    <div className="mb-2">
-                      {exp.role && (
-                        <>
-                          <span className="font-bold text-gray-900 dark:text-gray-100">
-                            {getDisplayValue("Role", exp.role)}
-                          </span>
-                          {period && <span className="mx-2">•</span>}
-                        </>
-                      )}
-                      {period && (
-                        <span className="text-gray-700 dark:text-gray-300">
-                          {period.display}
+                    {exp.role && (
+                      <div className="mb-2 text-sm sm:text-base">
+                        <span className="font-bold text-gray-900 dark:text-gray-100">
+                          {getDisplayValue("Role", exp.role)}
                         </span>
-                      )}
-                    </div>
+                      </div>
+                    )}
+                    {period && (
+                      <div className="mb-2 text-sm sm:text-base text-gray-700 dark:text-gray-300">
+                        {period.display}
+                      </div>
+                    )}
                     {exp.skills && exp.skills.length > 0 && (
                       <div className="flex flex-wrap gap-2 mb-2">
                         {exp.skills.map((skill: any, idx: number) => {
@@ -867,7 +946,11 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
                           ] as const;
                           const variant = variants[idx % variants.length];
                           return (
-                            <Badge key={skill.id || idx} variant={variant}>
+                            <Badge
+                              key={skill.id || idx}
+                              variant={variant}
+                              className="text-xs"
+                            >
                               {skill.name}
                             </Badge>
                           );
@@ -875,7 +958,7 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
                       </div>
                     )}
                     {exp.description && (
-                      <div className="text-base leading-relaxed whitespace-pre-line mb-4 text-gray-700 dark:text-gray-300">
+                      <div className="text-sm sm:text-base leading-relaxed whitespace-pre-line mb-4 text-gray-700 dark:text-gray-300">
                         {exp.description}
                       </div>
                     )}
@@ -887,9 +970,9 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
 
           {/* Side Project 섹션 */}
           {sideProjects.length > 0 && (
-            <section className="mb-10">
-              <hr className="border-gray-300 dark:border-gray-600 mb-4" />
-              <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
+            <section className="mb-6 sm:mb-10">
+              <hr className="border-gray-300 dark:border-gray-600 mb-3 sm:mb-4" />
+              <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-gray-900 dark:text-gray-100">
                 Side Project
               </h2>
               {sideProjects.map((project: any) => {
@@ -900,13 +983,13 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
                 );
 
                 return (
-                  <div key={project.id} className="mb-10">
-                    <hr className="border-gray-300 dark:border-gray-600 mb-6" />
-                    <h3 className="text-2xl font-bold mb-2 text-gray-900 dark:text-gray-100">
+                  <div key={project.id} className="mb-6 sm:mb-10">
+                    <hr className="border-gray-300 dark:border-gray-600 mb-4 sm:mb-6" />
+                    <h3 className="text-xl sm:text-2xl font-bold mb-2 text-gray-900 dark:text-gray-100">
                       {getDisplayValue("프로젝트명", project.name)}
                     </h3>
                     {period && (
-                      <div className="mb-2 text-gray-700 dark:text-gray-300">
+                      <div className="mb-2 text-sm sm:text-base text-gray-700 dark:text-gray-300">
                         {period.display}
                       </div>
                     )}
@@ -916,7 +999,7 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
                           href={normalizeUrl(project.link)}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-blue-600 dark:text-blue-400 hover:underline"
+                          className="text-sm sm:text-base text-blue-600 dark:text-blue-400 hover:underline break-all"
                         >
                           {project.link}
                         </a>
@@ -932,7 +1015,11 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
                           ] as const;
                           const variant = variants[idx % variants.length];
                           return (
-                            <Badge key={skill.id || idx} variant={variant}>
+                            <Badge
+                              key={skill.id || idx}
+                              variant={variant}
+                              className="text-xs"
+                            >
                               {skill.name}
                             </Badge>
                           );
@@ -940,7 +1027,7 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
                       </div>
                     )}
                     {project.description && (
-                      <div className="text-base leading-relaxed whitespace-pre-line mb-4 text-gray-700 dark:text-gray-300">
+                      <div className="text-sm sm:text-base leading-relaxed whitespace-pre-line mb-4 text-gray-700 dark:text-gray-300">
                         {project.description}
                       </div>
                     )}
@@ -1041,12 +1128,12 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
             if (topSkills.length === 0) return null;
 
             return (
-              <section className="mb-10">
-                <hr className="border-gray-300 dark:border-gray-600 mb-4" />
-                <h2 className="text-2xl font-bold mb-2 text-gray-900 dark:text-gray-100">
+              <section className="mb-6 sm:mb-10">
+                <hr className="border-gray-300 dark:border-gray-600 mb-3 sm:mb-4" />
+                <h2 className="text-xl sm:text-2xl font-bold mb-2 text-gray-900 dark:text-gray-100">
                   스킬 스택 그래프
                 </h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-4 sm:mb-6">
                   사용 기간이 가장 긴 6개의 스킬만 표시됩니다
                 </p>
                 <div className="w-full">
@@ -1058,9 +1145,9 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
 
           {/* Education 섹션 */}
           {educations.length > 0 && (
-            <section className="mb-10">
-              <hr className="border-gray-300 dark:border-gray-600 mb-4" />
-              <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
+            <section className="mb-6 sm:mb-10">
+              <hr className="border-gray-300 dark:border-gray-600 mb-3 sm:mb-4" />
+              <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-gray-900 dark:text-gray-100">
                 Education
               </h2>
               {educations.map((edu: any) => {
@@ -1071,23 +1158,23 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
                 );
 
                 return (
-                  <div key={edu.id} className="mb-10">
-                    <hr className="border-gray-300 dark:border-gray-600 mb-6" />
-                    <h3 className="text-2xl font-bold mb-2 text-gray-900 dark:text-gray-100">
+                  <div key={edu.id} className="mb-6 sm:mb-10">
+                    <hr className="border-gray-300 dark:border-gray-600 mb-4 sm:mb-6" />
+                    <h3 className="text-xl sm:text-2xl font-bold mb-2 text-gray-900 dark:text-gray-100">
                       {getDisplayValue("기관명", edu.institution)}
                     </h3>
                     {edu.major && (
-                      <div className="mb-2 text-gray-700 dark:text-gray-300">
+                      <div className="mb-2 text-sm sm:text-base text-gray-700 dark:text-gray-300">
                         {getDisplayValue("전공", edu.major)}
                       </div>
                     )}
                     {period && (
-                      <div className="mb-2 text-gray-700 dark:text-gray-300">
+                      <div className="mb-2 text-sm sm:text-base text-gray-700 dark:text-gray-300">
                         {period.display}
                       </div>
                     )}
                     {edu.description && (
-                      <div className="text-base leading-relaxed whitespace-pre-line mb-4 text-gray-700 dark:text-gray-300">
+                      <div className="text-sm sm:text-base leading-relaxed whitespace-pre-line mb-4 text-gray-700 dark:text-gray-300">
                         {edu.description}
                       </div>
                     )}
@@ -1099,25 +1186,25 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
 
           {/* 자격증 섹션 */}
           {certifications.length > 0 && (
-            <section className="mb-10">
-              <hr className="border-gray-300 dark:border-gray-600 mb-4" />
-              <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
+            <section className="mb-6 sm:mb-10">
+              <hr className="border-gray-300 dark:border-gray-600 mb-3 sm:mb-4" />
+              <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-gray-900 dark:text-gray-100">
                 자격증
               </h2>
               {certifications.map((cert: any) => {
                 const acquisitionDate = formatDate(cert.acquisition_date);
 
                 return (
-                  <div key={cert.id} className="mb-10">
-                    <hr className="border-gray-300 dark:border-gray-600 mb-6" />
-                    <h3 className="text-2xl font-bold mb-2 text-gray-900 dark:text-gray-100">
+                  <div key={cert.id} className="mb-6 sm:mb-10">
+                    <hr className="border-gray-300 dark:border-gray-600 mb-4 sm:mb-6" />
+                    <h3 className="text-xl sm:text-2xl font-bold mb-2 text-gray-900 dark:text-gray-100">
                       {getDisplayValue("자격증명", cert.name)}
                     </h3>
-                    <div className="mb-2 text-gray-700 dark:text-gray-300">
+                    <div className="mb-2 text-sm sm:text-base text-gray-700 dark:text-gray-300">
                       {getDisplayValue("발급기관", cert.issuer)}
                     </div>
                     {acquisitionDate && (
-                      <div className="mb-2 text-gray-700 dark:text-gray-300">
+                      <div className="mb-2 text-sm sm:text-base text-gray-700 dark:text-gray-300">
                         {acquisitionDate}
                       </div>
                     )}
@@ -1129,26 +1216,26 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
 
           {/* 어학 성적 섹션 */}
           {languageTests.length > 0 && (
-            <section className="mb-10">
-              <hr className="border-gray-300 dark:border-gray-600 mb-4" />
-              <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
+            <section className="mb-6 sm:mb-10">
+              <hr className="border-gray-300 dark:border-gray-600 mb-3 sm:mb-4" />
+              <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-gray-900 dark:text-gray-100">
                 어학 성적
               </h2>
               {languageTests.map((test: any) => {
                 const testDate = formatDate(test.test_date);
 
                 return (
-                  <div key={test.id} className="mb-10">
-                    <hr className="border-gray-300 dark:border-gray-600 mb-6" />
-                    <h3 className="text-2xl font-bold mb-2 text-gray-900 dark:text-gray-100">
+                  <div key={test.id} className="mb-6 sm:mb-10">
+                    <hr className="border-gray-300 dark:border-gray-600 mb-4 sm:mb-6" />
+                    <h3 className="text-xl sm:text-2xl font-bold mb-2 text-gray-900 dark:text-gray-100">
                       {getDisplayValue("시험명", test.name)}
                     </h3>
                     <div className="mb-2">
-                      <span className="text-lg text-gray-700 dark:text-gray-300">
+                      <span className="text-base sm:text-lg text-gray-700 dark:text-gray-300">
                         {getDisplayValue("점수", test.score)}
                       </span>
                       {testDate && (
-                        <span className="text-gray-700 dark:text-gray-300 ml-4">
+                        <span className="text-sm sm:text-base text-gray-700 dark:text-gray-300 ml-2 sm:ml-4">
                           ({testDate})
                         </span>
                       )}
@@ -1161,15 +1248,15 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
 
           {/* 그 외 활동 섹션 */}
           {etcs.length > 0 && (
-            <section className="mb-10">
-              <hr className="border-gray-300 dark:border-gray-600 mb-4" />
-              <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
+            <section className="mb-6 sm:mb-10">
+              <hr className="border-gray-300 dark:border-gray-600 mb-3 sm:mb-4" />
+              <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-gray-900 dark:text-gray-100">
                 그 외 활동
               </h2>
               {etcs.map((etc: any) => (
-                <div key={etc.id} className="mb-10">
-                  <hr className="border-gray-300 dark:border-gray-600 mb-6" />
-                  <h3 className="text-2xl font-bold mb-2 text-gray-900 dark:text-gray-100">
+                <div key={etc.id} className="mb-6 sm:mb-10">
+                  <hr className="border-gray-300 dark:border-gray-600 mb-4 sm:mb-6" />
+                  <h3 className="text-xl sm:text-2xl font-bold mb-2 text-gray-900 dark:text-gray-100">
                     {etc.link && etc.name ? (
                       <a
                         href={etc.link}
@@ -1184,7 +1271,7 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
                     )}
                   </h3>
                   {etc.description && (
-                    <div className="text-base leading-relaxed whitespace-pre-line mb-4 text-gray-700 dark:text-gray-300">
+                    <div className="text-sm sm:text-base leading-relaxed whitespace-pre-line mb-4 text-gray-700 dark:text-gray-300">
                       {etc.description}
                     </div>
                   )}

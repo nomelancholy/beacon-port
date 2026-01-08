@@ -1,3 +1,4 @@
+import * as React from "react";
 import {
   isRouteErrorResponse,
   Links,
@@ -109,6 +110,35 @@ export function ErrorBoundary() {
     if (isRouteError) {
       if (error.status === 404) {
         return "요청하신 페이지를 찾을 수 없습니다.";
+      }
+      // 비공개 이력서인 경우 특별한 메시지 표시
+      if (error.status === 403) {
+        // statusText에 비공개 메시지가 포함되어 있는지 확인
+        if (error.statusText?.includes("비공개 상태")) {
+          return error.statusText;
+        }
+        // error.data가 문자열인 경우 (JSON 문자열)
+        if (typeof error.data === "string") {
+          try {
+            const errorData = JSON.parse(error.data);
+            if (errorData?.isPrivateResume) {
+              return (
+                errorData.message ||
+                "이력서가 비공개 상태입니다. 이력서 주인에게 공개 전환을 요청하세요."
+              );
+            }
+          } catch {
+            // JSON 파싱 실패 시 기본 메시지
+          }
+        }
+        // error.data가 객체인 경우
+        if (error.data && typeof error.data === "object" && "isPrivateResume" in error.data) {
+          return (
+            (error.data as any).message ||
+            "이력서가 비공개 상태입니다. 이력서 주인에게 공개 전환을 요청하세요."
+          );
+        }
+        return error.statusText || "접근 권한이 없습니다.";
       }
       return error.statusText || error.data?.message || "오류가 발생했습니다.";
     }
