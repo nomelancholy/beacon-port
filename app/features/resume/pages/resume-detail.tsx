@@ -12,9 +12,18 @@ import {
   Edit,
   Share2,
   Printer,
+  Trash2,
 } from "lucide-react";
 import { Button } from "../../../components/ui/button";
 import { Badge } from "../../../components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogClose,
+} from "../../../components/ui/dialog";
 import { getResumeById } from "../queries";
 import { createSupabaseServerClient } from "~/supabase/server";
 import { cn } from "~/lib/utils";
@@ -126,6 +135,48 @@ export const action = async ({ params, request }: Route.ActionArgs) => {
         isPublic,
       };
     }
+
+    if (intent === "delete") {
+      // 이력서 소유자 확인
+      const { data: resume, error: resumeError } = await supabase
+        .from("resumes")
+        .select("user_id")
+        .eq("id", resumeId)
+        .single();
+
+      if (resumeError || !resume) {
+        return {
+          success: false,
+          error: "이력서를 찾을 수 없습니다.",
+        };
+      }
+
+      if (resume.user_id !== user.id) {
+        return {
+          success: false,
+          error: "이력서를 삭제할 권한이 없습니다.",
+        };
+      }
+
+      // 이력서 삭제 (CASCADE로 관련 데이터도 자동 삭제됨)
+      const { error: deleteError } = await supabase
+        .from("resumes")
+        .delete()
+        .eq("id", resumeId);
+
+      if (deleteError) {
+        console.error("Delete resume error:", deleteError);
+        return {
+          success: false,
+          error: "이력서 삭제에 실패했습니다.",
+        };
+      }
+
+      return {
+        success: true,
+        deleted: true,
+      };
+    }
   }
 
   return { success: false };
@@ -165,12 +216,12 @@ const getPlaceholder = (field: string): string => {
   return placeholders[field] || `${field}을(를) 입력하세요`;
 };
 
-// 값이 없으면 placeholder 반환, 있으면 값 반환
+// 값이 없으면 빈 문자열 반환, 있으면 값 반환 (상세 페이지에서는 placeholder 표시 안 함)
 const getDisplayValue = (
   field: string,
   value: string | null | undefined
 ): string => {
-  return value || getPlaceholder(field);
+  return value || "";
 };
 
 // 날짜 포맷팅 함수
@@ -211,9 +262,9 @@ const formatPeriod = (
 
   if (end) {
     return {
-      start: getPlaceholder("시작일"),
+      start: "",
       end,
-      display: `${getPlaceholder("시작일")} – ${end}`,
+      display: `${end}`,
     };
   }
 
@@ -312,6 +363,7 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
   const fetcher = useFetcher();
   const { toast, showToast, hideToast } = useToast();
   const [isPublic, setIsPublic] = React.useState(!!resume?.is_public);
+  const [showDeleteDialog, setShowDeleteDialog] = React.useState(false);
 
   // 초기 상태 설정
   React.useEffect(() => {
@@ -324,6 +376,12 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
   React.useEffect(() => {
     if (fetcher.data) {
       if (fetcher.data.success) {
+        if (fetcher.data.deleted) {
+          // 삭제 성공 시 목록 페이지로 리다이렉트
+          showToast("이력서가 삭제되었습니다.", "success");
+          navigate("/my-resume");
+          return;
+        }
         setIsPublic(fetcher.data.isPublic);
         showToast(
           fetcher.data.isPublic
@@ -337,7 +395,7 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
         setIsPublic(!!resume?.is_public);
       }
     }
-  }, [fetcher.data, showToast, resume]);
+  }, [fetcher.data, showToast, resume, navigate]);
 
   // URL 복사 함수
   const handleShare = async () => {
@@ -387,6 +445,17 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
     setIsPublic(checked);
 
     fetcher.submit(formData, { method: "POST" });
+  };
+
+  // 삭제 핸들러
+  const handleDelete = () => {
+    if (!resumeId) return;
+
+    const formData = new FormData();
+    formData.append("intent", "delete");
+
+    fetcher.submit(formData, { method: "POST" });
+    setShowDeleteDialog(false);
   };
 
   if (!resume) {
@@ -537,6 +606,24 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
               >
                 <Edit className="h-4 w-4 mr-2 transition-transform duration-200 group-hover:rotate-12" />
                 수정
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setShowDeleteDialog(true)}
+                className="group text-white border-gray-600 hover:bg-red-600 hover:text-white hover:border-red-600 transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95 cursor-pointer"
+                disabled={fetcher.state === "submitting"}
+              >
+                {fetcher.state === "submitting" ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    삭제 중...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4 mr-2 transition-transform duration-200 group-hover:rotate-12" />
+                    삭제
+                  </>
+                )}
               </Button>
               <Button
                 variant="outline"
@@ -701,14 +788,9 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
                           {period && <span className="mx-2">•</span>}
                         </>
                       )}
-                      {period ? (
+                      {period && (
                         <span className="text-gray-700 dark:text-gray-300">
                           {period.display}
-                        </span>
-                      ) : (
-                        <span className="text-gray-400 dark:text-gray-500 italic">
-                          {getPlaceholder("시작일")} –{" "}
-                          {getPlaceholder("종료일")}
                         </span>
                       )}
                     </div>
@@ -760,13 +842,9 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
                     <h3 className="text-2xl font-bold mb-2 text-gray-900 dark:text-gray-100">
                       {getDisplayValue("프로젝트명", project.name)}
                     </h3>
-                    {period ? (
+                    {period && (
                       <div className="mb-2 text-gray-700 dark:text-gray-300">
                         {period.display}
-                      </div>
-                    ) : (
-                      <div className="mb-2 text-gray-400 dark:text-gray-500 italic">
-                        {getPlaceholder("시작일")} – {getPlaceholder("종료일")}
                       </div>
                     )}
                     {project.skills && project.skills.length > 0 && (
@@ -822,13 +900,9 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
                         {getDisplayValue("전공", edu.major)}
                       </div>
                     )}
-                    {period ? (
+                    {period && (
                       <div className="mb-2 text-gray-700 dark:text-gray-300">
                         {period.display}
-                      </div>
-                    ) : (
-                      <div className="mb-2 text-gray-400 dark:text-gray-500 italic">
-                        {getPlaceholder("시작일")} – {getPlaceholder("종료일")}
                       </div>
                     )}
                     {edu.description && (
@@ -1048,6 +1122,44 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
       {toast && (
         <Toast message={toast.message} type={toast.type} onClose={hideToast} />
       )}
+
+      {/* 삭제 확인 다이얼로그 */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent className="bg-white dark:bg-gray-800">
+          <DialogClose onClose={() => setShowDeleteDialog(false)} />
+          <DialogHeader>
+            <DialogTitle>이력서 삭제</DialogTitle>
+            <DialogDescription>
+              정말로 이 이력서를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-3 mt-6">
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteDialog(false)}
+              disabled={fetcher.state === "submitting"}
+              className="cursor-pointer"
+            >
+              취소
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={fetcher.state === "submitting"}
+              className="cursor-pointer"
+            >
+              {fetcher.state === "submitting" ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  삭제 중...
+                </>
+              ) : (
+                "삭제"
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

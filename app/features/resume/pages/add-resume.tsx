@@ -2865,12 +2865,12 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
       return placeholders[field] || `${field}을(를) 입력하세요`;
     };
 
-    // 값이 없으면 placeholder 반환, 있으면 값 반환
+    // 값이 없으면 빈 문자열 반환, 있으면 값 반환 (미리보기에서는 placeholder 표시 안 함)
     const getDisplayValue = (
       field: string,
       value: string | undefined
     ): string => {
-      return value || getPlaceholder(field);
+      return value || "";
     };
 
     // 아이콘으로 표시할 소셜 미디어 목록 (선택된 것만)
@@ -3156,9 +3156,9 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
 
                   if (end) {
                     return {
-                      start: getPlaceholder("시작일"),
+                      start: "",
                       end,
-                      display: `${getPlaceholder("시작일")} – ${end}`,
+                      display: `${end}`,
                     };
                   }
 
@@ -3188,14 +3188,9 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
                         </span>
                       )}
                       {(role || period) && <span className="mx-2">•</span>}
-                      {period ? (
+                      {period && (
                         <span className="text-gray-700 dark:text-gray-300">
                           {period.display}
-                        </span>
-                      ) : (
-                        <span className="text-gray-400 dark:text-gray-500 italic">
-                          {getPlaceholder("시작일")} –{" "}
-                          {getPlaceholder("종료일")}
                         </span>
                       )}
                     </div>
@@ -3282,9 +3277,9 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
 
                   if (end) {
                     return {
-                      start: getPlaceholder("시작일"),
+                      start: "",
                       end,
-                      display: `${getPlaceholder("시작일")} – ${end}`,
+                      display: `${end}`,
                     };
                   }
 
@@ -3301,13 +3296,9 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
                     >
                       {getDisplayValue("프로젝트명", projectName)}
                     </h3>
-                    {period ? (
+                    {period && (
                       <div className="mb-2 text-gray-700 dark:text-gray-300">
                         {period.display}
-                      </div>
-                    ) : (
-                      <div className="mb-2 text-gray-400 dark:text-gray-500 italic">
-                        {getPlaceholder("시작일")} – {getPlaceholder("종료일")}
                       </div>
                     )}
                     {techStack && (
@@ -3393,9 +3384,9 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
 
                   if (end) {
                     return {
-                      start: getPlaceholder("시작일"),
+                      start: "",
                       end,
-                      display: `${getPlaceholder("시작일")} – ${end}`,
+                      display: `${end}`,
                     };
                   }
 
@@ -3417,15 +3408,11 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
                     >
                       {getDisplayValue("전공", major)}
                     </div>
-                    {period ? (
+                    {period && (
                       <div
                         className={`mb-2 ${!startDate || !endDate ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
                       >
                         {period.display}
-                      </div>
-                    ) : (
-                      <div className="mb-2 text-gray-400 dark:text-gray-500 italic">
-                        {getPlaceholder("시작일")} – {getPlaceholder("종료일")}
                       </div>
                     )}
                     <div
@@ -3481,11 +3468,11 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
                     >
                       {getDisplayValue("발급기관", issuer)}
                     </div>
-                    <div
-                      className={`mb-2 ${!acquisitionDateFormatted ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
-                    >
-                      {acquisitionDateFormatted || getPlaceholder("취득일")}
-                    </div>
+                    {acquisitionDateFormatted && (
+                      <div className="mb-2 text-gray-700 dark:text-gray-300">
+                        {acquisitionDateFormatted}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -3538,11 +3525,6 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
                       {testDateFormatted && (
                         <span className="text-gray-700 dark:text-gray-300 ml-4">
                           ({testDateFormatted})
-                        </span>
-                      )}
-                      {!testDateFormatted && (
-                        <span className="text-gray-400 dark:text-gray-500 italic ml-4">
-                          ({getPlaceholder("응시일자")})
                         </span>
                       )}
                     </div>
