@@ -225,6 +225,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
         role: (formData.get("Role") as string) || null,
         phone: (formData.get("전화번호") as string) || null,
         email: (formData.get("이메일") as string) || null,
+        address: (formData.get("주소") as string) || null,
         blog: (formData.get("블로그") as string) || null,
         linkedin: (formData.get("LinkedIn") as string) || null,
         instagram: (formData.get("Instagram") as string) || null,
@@ -533,6 +534,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
             const startDate = formData.get(`${itemId}_시작일`) as string;
             const endDate = formData.get(`${itemId}_종료일`) as string;
             const description = formData.get(`${itemId}_주요작업`) as string;
+            const link = formData.get(`${itemId}_링크`) as string;
             const techStack = formData.get(`${itemId}_기술스택`) as string;
 
             if (!name || !startDate) return null;
@@ -545,6 +547,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
                 ? new Date(endDate + "-01").toISOString()
                 : null,
               description: description || null,
+              link: link || null,
               display_order: index,
               techStack: techStack || "", // 기술 스택은 별도로 저장
             };
@@ -881,6 +884,7 @@ const resumeCategories = {
     "Role",
     "이메일",
     "전화번호",
+    "주소",
     "영어 구사 능력",
     "블로그",
     "LinkedIn",
@@ -925,17 +929,30 @@ const SkillStackChart = React.memo(
 
     // 가장 긴 막대의 값을 찾아서 domain을 조정하여 우측 여백 생성
     const maxValue = Math.max(...chartData.map((d) => d.years));
-    const domainMax = maxValue * 1.1;
+    const domainMax = maxValue * 1.18;
+
+    // 스킬 개수에 따라 높이 동적 계산 (각 막대 20px, 최소 60px)
+    const skillCount = chartData.length;
+    const barHeight = 20; // 각 막대 높이
+    const minHeight = 60; // 최소 높이
+    const calculatedHeight = Math.max(minHeight, skillCount * barHeight);
 
     return (
-      <div className="w-full">
-        <ChartContainer config={chartConfig}>
+      <div className="w-full" style={{ height: calculatedHeight }}>
+        <ChartContainer
+          config={chartConfig}
+          className="aspect-none h-full w-full"
+        >
           <BarChart
             accessibilityLayer
             data={chartData}
             layout="vertical"
+            barCategoryGap={2}
+            height={calculatedHeight}
             margin={{
               right: 16,
+              top: 2,
+              bottom: 2,
             }}
           >
             <CartesianGrid horizontal={false} />
@@ -948,7 +965,12 @@ const SkillStackChart = React.memo(
               hide
             />
             <XAxis dataKey="years" type="number" hide domain={[0, domainMax]} />
-            <Bar dataKey="years" fill="var(--color-years)" radius={4}>
+            <Bar
+              dataKey="years"
+              fill="var(--color-years)"
+              radius={4}
+              barSize={20}
+            >
               <LabelList
                 dataKey="skill"
                 position="insideLeft"
@@ -1561,6 +1583,24 @@ const SideProjectCard = React.memo(
             </div>
             <div>
               <label
+                htmlFor={`${itemId}_링크`}
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                링크
+              </label>
+              <Input
+                id={`${itemId}_링크`}
+                name={`${itemId}_링크`}
+                type="url"
+                value={formData[`${itemId}_링크`] || ""}
+                onChange={(e) =>
+                  onInputChange(`${itemId}_링크`, e.target.value)
+                }
+                placeholder="https://example.com"
+              />
+            </div>
+            <div>
+              <label
                 htmlFor={`${itemId}_주요작업`}
                 className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
               >
@@ -1593,6 +1633,7 @@ const SideProjectCard = React.memo(
       prev.formData[`${id}_시작일`] === next.formData[`${id}_시작일`] &&
       prev.formData[`${id}_종료일`] === next.formData[`${id}_종료일`] &&
       prev.formData[`${id}_기술스택`] === next.formData[`${id}_기술스택`] &&
+      prev.formData[`${id}_링크`] === next.formData[`${id}_링크`] &&
       prev.formData[`${id}_주요작업`] === next.formData[`${id}_주요작업`]
     );
   }
@@ -2283,6 +2324,10 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
       formData["전화번호"] = resume.phone;
       selectedFields["전화번호"] = true;
     }
+    if (resume.address) {
+      formData["주소"] = resume.address;
+      selectedFields["주소"] = true;
+    }
     if (resume.english_level) {
       formData["영어 구사 능력"] = resume.english_level;
       selectedFields["영어 구사 능력"] = true;
@@ -2358,6 +2403,7 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
         formData[`${itemId}_종료일`] = sp.end_date
           ? new Date(sp.end_date).toISOString().slice(0, 7)
           : "";
+        formData[`${itemId}_링크`] = sp.link || "";
         formData[`${itemId}_주요작업`] = sp.description || "";
         if (sp.skills && sp.skills.length > 0) {
           formData[`${itemId}_기술스택`] = sp.skills
@@ -2589,6 +2635,77 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
 
   const handleSaveResume = () => {
     if (!resumeTitle.trim()) return;
+
+    // 시작 일자 검증
+    // 1. Experience 검증
+    const experienceKeys = Object.keys(formData).filter((key) =>
+      key.startsWith("Experience_")
+    );
+    const experienceItemIds = [
+      ...new Set(
+        experienceKeys.map((key) => {
+          const parts = key.split("_");
+          return parts[0] + "_" + parts[1]; // "Experience_xxx"
+        })
+      ),
+    ];
+    for (const itemId of experienceItemIds) {
+      const company = formData[`${itemId}_회사명`];
+      const role = formData[`${itemId}_Role`];
+      const startDate = formData[`${itemId}_시작일`];
+
+      // 회사명이나 Role이 있으면 시작일은 필수
+      if ((company || role) && !startDate) {
+        showToast("경력 항목의 시작일을 입력해주세요.", "error");
+        return;
+      }
+    }
+
+    // 2. Side Project 검증
+    const sideProjectKeys = Object.keys(formData).filter((key) =>
+      key.startsWith("Side Project_")
+    );
+    const sideProjectItemIds = [
+      ...new Set(
+        sideProjectKeys.map((key) => {
+          const match = key.match(/^(Side Project_[^_]+)/);
+          return match ? match[1] : null;
+        })
+      ),
+    ].filter((id) => id !== null) as string[];
+    for (const itemId of sideProjectItemIds) {
+      const projectName = formData[`${itemId}_프로젝트명`];
+      const startDate = formData[`${itemId}_시작일`];
+
+      // 프로젝트명이 있으면 시작일은 필수
+      if (projectName && !startDate) {
+        showToast("사이드 프로젝트 항목의 시작일을 입력해주세요.", "error");
+        return;
+      }
+    }
+
+    // 3. Education 검증
+    const educationKeys = Object.keys(formData).filter((key) =>
+      key.startsWith("Education_")
+    );
+    const educationItemIds = [
+      ...new Set(
+        educationKeys.map((key) => {
+          const parts = key.split("_");
+          return parts[0] + "_" + parts[1]; // "Education_xxx"
+        })
+      ),
+    ];
+    for (const itemId of educationItemIds) {
+      const institution = formData[`${itemId}_기관명`];
+      const startDate = formData[`${itemId}_시작일`];
+
+      // 기관명이 있으면 시작일은 필수
+      if (institution && !startDate) {
+        showToast("교육 항목의 시작일을 입력해주세요.", "error");
+        return;
+      }
+    }
 
     // formData에 title 추가하고 제출
     const formDataToSubmit = new FormData();
@@ -2839,6 +2956,7 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
         Role: "Role을 입력하세요",
         이메일: "이메일을 입력하세요",
         전화번호: "전화번호를 입력하세요",
+        주소: "주소를 입력하세요",
         "영어 구사 능력": "수준을 선택하세요",
         블로그: "블로그를 입력하세요",
         Introduce: "자기소개를 입력하세요",
@@ -2937,6 +3055,13 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
         value: formData["전화번호"],
         isLink: false,
         selected: selectedFields["전화번호"],
+      },
+      {
+        key: "주소",
+        label: "Address",
+        value: formData["주소"],
+        isLink: false,
+        selected: selectedFields["주소"],
       },
     ].filter((item) => item.selected);
 
@@ -3245,6 +3370,7 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
                 const projectName = formData[`${field}_프로젝트명`];
                 const startDate = formData[`${field}_시작일`];
                 const endDate = formData[`${field}_종료일`];
+                const link = formData[`${field}_링크`];
                 const techStack = formData[`${field}_기술스택`];
                 const description = formData[`${field}_주요작업`];
 
@@ -3299,6 +3425,18 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
                     {period && (
                       <div className="mb-2 text-gray-700 dark:text-gray-300">
                         {period.display}
+                      </div>
+                    )}
+                    {link && (
+                      <div className="mb-2">
+                        <a
+                          href={normalizeUrl(link)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 dark:text-blue-400 hover:underline"
+                        >
+                          {link}
+                        </a>
                       </div>
                     )}
                     {techStack && (

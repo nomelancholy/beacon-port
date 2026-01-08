@@ -11,6 +11,7 @@ import {
   NavigationMenuList,
   navigationMenuTriggerStyle,
 } from "../components/ui/navigation-menu";
+import { createSupabaseServerClient } from "~/supabase/server";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -22,7 +23,17 @@ export function meta({}: Route.MetaArgs) {
   ];
 }
 
-export default function Home() {
+export const loader = async ({ request }: Route.LoaderArgs) => {
+  const supabase = createSupabaseServerClient(request);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  return { isAuthenticated: !!user };
+};
+
+export default function Home({ loaderData }: Route.ComponentProps) {
+  const { isAuthenticated } = loaderData;
   return (
     <div className="w-full">
       {/* Navigation Menu */}
@@ -38,14 +49,25 @@ export default function Home() {
                 <Link to="/explore">둘러보기</Link>
               </NavigationMenuLink>
             </NavigationMenuItem> */}
-            <NavigationMenuItem>
-              <NavigationMenuLink
-                asChild
-                className={`${navigationMenuTriggerStyle()} text-white hover:text-white/80`}
-              >
-                <Link to="/login">로그인/회원가입</Link>
-              </NavigationMenuLink>
-            </NavigationMenuItem>
+            {isAuthenticated ? (
+              <NavigationMenuItem>
+                <NavigationMenuLink
+                  asChild
+                  className={`${navigationMenuTriggerStyle()} text-white hover:text-white/80`}
+                >
+                  <Link to="/my-resume">나의 이력서</Link>
+                </NavigationMenuLink>
+              </NavigationMenuItem>
+            ) : (
+              <NavigationMenuItem>
+                <NavigationMenuLink
+                  asChild
+                  className={`${navigationMenuTriggerStyle()} text-white hover:text-white/80`}
+                >
+                  <Link to="/login">로그인/회원가입</Link>
+                </NavigationMenuLink>
+              </NavigationMenuItem>
+            )}
           </NavigationMenuList>
         </NavigationMenu>
       </nav>

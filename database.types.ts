@@ -260,6 +260,7 @@ export type Database = {
       }
       resumes: {
         Row: {
+          address: string | null
           blog: string | null
           created_at: string
           email: string | null
@@ -282,6 +283,7 @@ export type Database = {
           youtube: string | null
         }
         Insert: {
+          address?: string | null
           blog?: string | null
           created_at?: string
           email?: string | null
@@ -304,6 +306,7 @@ export type Database = {
           youtube?: string | null
         }
         Update: {
+          address?: string | null
           blog?: string | null
           created_at?: string
           email?: string | null
@@ -371,6 +374,7 @@ export type Database = {
           display_order: number
           end_date: string | null
           id: string
+          link: string | null
           name: string
           resume_id: string | null
           start_date: string
@@ -380,6 +384,7 @@ export type Database = {
           display_order?: number
           end_date?: string | null
           id?: string
+          link?: string | null
           name: string
           resume_id?: string | null
           start_date: string
@@ -389,6 +394,7 @@ export type Database = {
           display_order?: number
           end_date?: string | null
           id?: string
+          link?: string | null
           name?: string
           resume_id?: string | null
           start_date?: string

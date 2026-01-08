@@ -24,6 +24,20 @@ export function meta({}: Route.MetaArgs) {
   ];
 }
 
+export const loader = async ({ request }: Route.LoaderArgs) => {
+  const supabase = createSupabaseServerClient(request);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // 로그인되어 있으면 나의 이력서 페이지로 리다이렉트
+  if (user) {
+    return redirect("/my-resume");
+  }
+
+  return {};
+};
+
 export const action = async ({ request }: Route.ActionArgs) => {
   if (request.method === "POST") {
     const formData = await request.formData();

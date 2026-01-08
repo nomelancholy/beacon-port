@@ -11,6 +11,7 @@ import {
 import { Loader2, AlertCircle, Home } from "lucide-react";
 import { Link } from "react-router";
 import { Button } from "./components/ui/button";
+import { Footer } from "./components/ui/footer";
 
 import type { Route } from "./+types/root";
 import "./app.css";
@@ -67,10 +68,13 @@ export default function App() {
       <div
         className={cn(
           isLoading && "pointer-events-none opacity-50",
-          "transition-opacity duration-300"
+          "transition-opacity duration-300 flex flex-col min-h-screen"
         )}
       >
-        <Outlet />
+        <div className="flex-1">
+          <Outlet />
+        </div>
+        <Footer />
       </div>
     </div>
   );

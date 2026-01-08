@@ -83,7 +83,7 @@ export default function AuthCallback() {
         ) : (
           <>
             <Loader2 className="h-8 w-8 animate-spin text-white mx-auto" />
-            <p className="text-white text-xl">인증 중...</p>
+          <p className="text-white text-xl">인증 중...</p>
             <p className="text-white/70 text-sm">
               잠시만 기다려주세요
             </p>

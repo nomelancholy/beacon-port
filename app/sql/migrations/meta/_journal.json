@@ -43,6 +43,13 @@
       "when": 1767784237795,
       "tag": "0005_quick_whizzer",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1767839762385,
+      "tag": "0006_big_jubilee",
+      "breakpoints": true
     }
   ]
 }
