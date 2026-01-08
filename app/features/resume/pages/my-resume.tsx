@@ -88,7 +88,19 @@ export default function MyResume({ loaderData }: Route.ComponentProps) {
       <div className="border-b border-gray-700 bg-gray-900">
         <div className="container mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-bold text-white">나의 이력서</h1>
+            <div className="flex items-center gap-4">
+              <Link
+                to="/"
+                className="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-gray-800/50 transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95 cursor-pointer"
+              >
+                <img
+                  src="/icon.png"
+                  alt="Beacon Port"
+                  className="w-8 h-8"
+                />
+              </Link>
+              <h1 className="text-3xl font-bold text-white">나의 이력서</h1>
+            </div>
             <div className="flex items-center gap-3">
               <Button
                 onClick={handleAddResume}

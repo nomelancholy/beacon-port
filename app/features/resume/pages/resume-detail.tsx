@@ -616,14 +616,22 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
       <div className="border-b border-gray-700 bg-gray-900 no-print">
         <div className="container mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
-            <Button
-              variant="ghost"
-              onClick={() => navigate("/my-resume")}
-              className="group text-white hover:text-white/90 hover:bg-gray-800/50 transition-all duration-200 ease-in-out transform hover:scale-105 cursor-pointer"
-            >
-              <ArrowLeft className="h-4 w-4 mr-2 transition-transform duration-200 group-hover:-translate-x-1" />
-              목록으로
-            </Button>
+            <div className="flex items-center gap-4">
+              <Link
+                to="/"
+                className="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-gray-800/50 transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95 cursor-pointer"
+              >
+                <img src="/icon.png" alt="Beacon Port" className="w-8 h-8" />
+              </Link>
+              <Button
+                variant="ghost"
+                onClick={() => navigate("/my-resume")}
+                className="group text-white hover:text-white/90 hover:bg-gray-800/50 transition-all duration-200 ease-in-out transform hover:scale-105 cursor-pointer"
+              >
+                <ArrowLeft className="h-4 w-4 mr-2 transition-transform duration-200 group-hover:-translate-x-1" />
+                목록으로
+              </Button>
+            </div>
             <h1 className="text-2xl font-bold text-white">{resume.title}</h1>
             <div className="flex items-center gap-3">
               {/* 공개/비공개 스위치 */}
