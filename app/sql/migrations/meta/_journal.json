@@ -50,6 +50,13 @@
       "when": 1767839762385,
       "tag": "0006_big_jubilee",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1767867794005,
+      "tag": "0007_grey_mesmero",
+      "breakpoints": true
     }
   ]
 }
