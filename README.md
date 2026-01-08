@@ -1,3 +1,5 @@
+![Beacon Port Logo](./public/icon.png)
+
 # Beacon Port
 
 **인재의 신호가 모이는 곳** - 온라인 이력서 작성 및 공유 플랫폼
