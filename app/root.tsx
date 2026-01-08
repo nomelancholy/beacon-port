@@ -31,27 +31,9 @@ export const links: Route.LinksFunction = () => [
   },
 ];
 
-export const meta: Route.MetaFunction = ({ request }) => {
-  // 사이트 URL 가져오기 (request에서 추출하거나 기본값 사용)
-  let siteUrl = "https://www.beaconport.online";
-  
-  // request가 있을 때만 헤더에서 URL 추출 시도
-  if (request) {
-    try {
-      const url = new URL(request.url);
-      siteUrl = `${url.protocol}//${url.host}`;
-    } catch (e) {
-      // URL 파싱 실패 시 기본값 사용
-      try {
-        const proto = request.headers.get("x-forwarded-proto") || "https";
-        const host = request.headers.get("host") || "www.beaconport.online";
-        siteUrl = `${proto}://${host}`;
-      } catch (e2) {
-        // 헤더 접근 실패 시 기본값 사용
-      }
-    }
-  }
-  
+export const meta: Route.MetaFunction = () => {
+  // Open Graph 태그용 프로덕션 URL (카카오톡 공유 시 사용)
+  const siteUrl = "https://www.beaconport.online";
   const imageUrl = `${siteUrl}/icon.png`;
 
   return [
@@ -176,7 +158,11 @@ export function ErrorBoundary() {
           }
         }
         // error.data가 객체인 경우
-        if (error.data && typeof error.data === "object" && "isPrivateResume" in error.data) {
+        if (
+          error.data &&
+          typeof error.data === "object" &&
+          "isPrivateResume" in error.data
+        ) {
           return (
             (error.data as any).message ||
             "이력서가 비공개 상태입니다. 이력서 주인에게 공개 전환을 요청하세요."
