@@ -2264,13 +2264,9 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
   const { toast, showToast, hideToast } = useToast();
   const isEditMode = !!loaderData?.resume;
 
-  // About Me 하위 항목들을 기본값으로 모두 선택
+  // 초기 선택 필드 (모두 비어있음)
   const getInitialSelectedFields = () => {
-    const fields: Record<string, boolean> = {};
-    resumeCategories["About Me"].forEach((field) => {
-      fields[field] = true;
-    });
-    return fields;
+    return {} as Record<string, boolean>;
   };
 
   // 기존 데이터로 초기화
