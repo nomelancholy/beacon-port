@@ -32,11 +32,25 @@ export const links: Route.LinksFunction = () => [
 ];
 
 export const meta: Route.MetaFunction = ({ request }) => {
-  // 사이트 URL 가져오기 (환경 변수 또는 request에서)
-  const siteUrl =
-    process.env.PUBLIC_SITE_URL ||
-    process.env.SITE_URL ||
-    `${request.headers.get("x-forwarded-proto") || "https"}://${request.headers.get("host") || "www.beaconport.online"}`;
+  // 사이트 URL 가져오기 (request에서 추출하거나 기본값 사용)
+  let siteUrl = "https://www.beaconport.online";
+  
+  // request가 있을 때만 헤더에서 URL 추출 시도
+  if (request) {
+    try {
+      const url = new URL(request.url);
+      siteUrl = `${url.protocol}//${url.host}`;
+    } catch (e) {
+      // URL 파싱 실패 시 기본값 사용
+      try {
+        const proto = request.headers.get("x-forwarded-proto") || "https";
+        const host = request.headers.get("host") || "www.beaconport.online";
+        siteUrl = `${proto}://${host}`;
+      } catch (e2) {
+        // 헤더 접근 실패 시 기본값 사용
+      }
+    }
+  }
   
   const imageUrl = `${siteUrl}/icon.png`;
 
