@@ -31,6 +31,36 @@ export const links: Route.LinksFunction = () => [
   },
 ];
 
+export const meta: Route.MetaFunction = ({ request }) => {
+  // 사이트 URL 가져오기 (환경 변수 또는 request에서)
+  const siteUrl =
+    process.env.PUBLIC_SITE_URL ||
+    process.env.SITE_URL ||
+    `${request.headers.get("x-forwarded-proto") || "https"}://${request.headers.get("host") || "www.beaconport.online"}`;
+  
+  const imageUrl = `${siteUrl}/icon.png`;
+
+  return [
+    { title: "Beacon Port - 인재의 신호가 모이는 곳" },
+    {
+      name: "description",
+      content: "인재의 신호가 모이는 곳. 지금 당신의 Beacon을 켜세요",
+    },
+    // Open Graph 메타 태그
+    { property: "og:type", content: "website" },
+    { property: "og:title", content: "Beacon Port" },
+    { property: "og:description", content: "인재의 신호가 모이는 곳" },
+    { property: "og:image", content: imageUrl },
+    { property: "og:url", content: siteUrl },
+    { property: "og:site_name", content: "Beacon Port" },
+    // Twitter Card 메타 태그
+    { name: "twitter:card", content: "summary_large_image" },
+    { name: "twitter:title", content: "Beacon Port" },
+    { name: "twitter:description", content: "인재의 신호가 모이는 곳" },
+    { name: "twitter:image", content: imageUrl },
+  ];
+};
+
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
