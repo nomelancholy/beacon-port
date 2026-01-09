@@ -218,10 +218,49 @@ export const action = async ({ request }: Route.ActionArgs) => {
         }
       }
 
+      // name은 필수 필드
+      const name = (formData.get("이름") as string) || "";
+      if (!name) {
+        return {
+          success: false,
+          error: "이름은 필수 입력 항목입니다.",
+        };
+      }
+
+      let resumeId: string;
+      let existingIsPublic: boolean = false; // 신규 이력서는 기본값 false
+
+      // 수정 모드인 경우 기존 is_public 값 가져오기
+      if (resumeIdParam) {
+        // 소유자 확인 및 기존 is_public 값 조회
+        const { data: existingResume, error: checkError } = await supabase
+          .from("resumes")
+          .select("user_id, is_public")
+          .eq("id", resumeIdParam)
+          .single();
+
+        if (checkError || !existingResume) {
+          return {
+            success: false,
+            error: "이력서를 찾을 수 없습니다.",
+          };
+        }
+
+        if (existingResume.user_id !== user.id) {
+          return {
+            success: false,
+            error: "이력서를 수정할 권한이 없습니다.",
+          };
+        }
+
+        // 기존 is_public 값 유지
+        existingIsPublic = existingResume.is_public;
+      }
+
       const resumeData = {
         user_id: user.id,
         title: title.trim(),
-        name: (formData.get("이름") as string) || "",
+        name: name,
         photo: photoUrl,
         role: (formData.get("Role") as string) || null,
         phone: (formData.get("전화번호") as string) || null,
@@ -241,42 +280,11 @@ export const action = async ({ request }: Route.ActionArgs) => {
             | "Advanced"
             | "Intermediate"
             | "Basic") || null,
-        is_public: false,
+        is_public: existingIsPublic, // 수정 모드면 기존 값, 신규면 false
       };
-
-      // name은 필수 필드
-      if (!resumeData.name) {
-        return {
-          success: false,
-          error: "이름은 필수 입력 항목입니다.",
-        };
-      }
-
-      let resumeId: string;
 
       // 수정 모드인 경우
       if (resumeIdParam) {
-        // 소유자 확인
-        const { data: existingResume, error: checkError } = await supabase
-          .from("resumes")
-          .select("user_id")
-          .eq("id", resumeIdParam)
-          .single();
-
-        if (checkError || !existingResume) {
-          return {
-            success: false,
-            error: "이력서를 찾을 수 없습니다.",
-          };
-        }
-
-        if (existingResume.user_id !== user.id) {
-          return {
-            success: false,
-            error: "이력서를 수정할 권한이 없습니다.",
-          };
-        }
-
         // 기존 데이터 업데이트
         const { data: updatedResume, error: updateError } = await supabase
           .from("resumes")
@@ -336,9 +344,11 @@ export const action = async ({ request }: Route.ActionArgs) => {
       // 1. Experiences 검증 및 순서 처리
       const experienceOrderStr = formData.get("_order_Experience");
       let experienceItemIds: string[] = [];
-      
+
       if (experienceOrderStr) {
-        const experienceOrder = JSON.parse(experienceOrderStr as string) as string[];
+        const experienceOrder = JSON.parse(
+          experienceOrderStr as string
+        ) as string[];
         experienceItemIds = experienceOrder.filter((itemId) => {
           const company = formData.get(`${itemId}_회사명`);
           return company !== null;
@@ -370,9 +380,11 @@ export const action = async ({ request }: Route.ActionArgs) => {
       // 2. Side Projects 검증 및 순서 처리
       const sideProjectOrderStr = formData.get("_order_Side Project");
       let sideProjectItemIds: string[] = [];
-      
+
       if (sideProjectOrderStr) {
-        const sideProjectOrder = JSON.parse(sideProjectOrderStr as string) as string[];
+        const sideProjectOrder = JSON.parse(
+          sideProjectOrderStr as string
+        ) as string[];
         sideProjectItemIds = sideProjectOrder.filter((itemId) => {
           const name = formData.get(`${itemId}_프로젝트명`);
           return name !== null;
@@ -405,10 +417,12 @@ export const action = async ({ request }: Route.ActionArgs) => {
       // dynamicItems의 순서를 사용하여 드래그 순서 보존
       const educationOrderStr = formData.get("_order_Education");
       let educationItemIds: string[] = [];
-      
+
       if (educationOrderStr) {
         // 순서 정보가 있으면 그 순서 사용
-        const educationOrder = JSON.parse(educationOrderStr as string) as string[];
+        const educationOrder = JSON.parse(
+          educationOrderStr as string
+        ) as string[];
         educationItemIds = educationOrder.filter((itemId) => {
           // 해당 항목이 실제로 formData에 있는지 확인
           const institution = formData.get(`${itemId}_기관명`);
@@ -428,7 +442,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
           ),
         ];
       }
-      
+
       if (educationItemIds.length > 0) {
         educationItemIds.forEach((itemId, index) => {
           const institution = formData.get(`${itemId}_기관명`) as string;
@@ -443,9 +457,11 @@ export const action = async ({ request }: Route.ActionArgs) => {
       // 4. Certifications 검증 및 순서 처리
       const certificationOrderStr = formData.get("_order_자격증");
       let certificationItemIds: string[] = [];
-      
+
       if (certificationOrderStr) {
-        const certificationOrder = JSON.parse(certificationOrderStr as string) as string[];
+        const certificationOrder = JSON.parse(
+          certificationOrderStr as string
+        ) as string[];
         certificationItemIds = certificationOrder.filter((itemId) => {
           const name = formData.get(`${itemId}_자격증명`);
           return name !== null;
@@ -740,9 +756,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
         if (sideProjectsData.length > 0) {
           const { data: insertedSideProjects, error: spError } = await supabase
             .from("side_projects")
-            .insert(
-              sideProjectsData.map(({ techStack, ...rest }) => rest)
-            )
+            .insert(sideProjectsData.map(({ techStack, ...rest }) => rest))
             .select("id");
 
           if (spError) {
@@ -2660,6 +2674,7 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
   const [showTitleDialog, setShowTitleDialog] = React.useState(false);
   const [resumeTitle, setResumeTitle] = React.useState(initialData.resumeTitle);
   const [isUploadingPhoto, setIsUploadingPhoto] = React.useState(false);
+  const [isSaving, setIsSaving] = React.useState(false);
   const [openCategories, setOpenCategories] = React.useState<
     Record<string, boolean>
   >({
@@ -2669,6 +2684,7 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
   // 저장 상태 모니터링 및 에러 처리
   React.useEffect(() => {
     if (fetcher.data) {
+      setIsSaving(false); // 저장 완료 또는 에러 발생 시 로딩 상태 해제
       if (fetcher.data.error) {
         showToast(fetcher.data.error, "error");
       } else if (fetcher.data.success === false && fetcher.data.error) {
@@ -2676,6 +2692,13 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
       }
     }
   }, [fetcher.data, showToast]);
+
+  // fetcher.state가 idle로 변경되면 로딩 상태 해제
+  React.useEffect(() => {
+    if (fetcher.state === "idle" && !fetcher.data) {
+      setIsSaving(false);
+    }
+  }, [fetcher.state, fetcher.data]);
 
   // 동적 항목 관리 (Experience, Side Project 등)
   const [dynamicItems, setDynamicItems] = React.useState<
@@ -2869,6 +2892,9 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
         return;
       }
     }
+
+    // 검증 통과 시 즉시 로딩 상태 활성화
+    setIsSaving(true);
 
     // formData에 title 추가하고 제출
     const formDataToSubmit = new FormData();
@@ -4074,7 +4100,9 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
       onDragEnd={handleDragEnd}
     >
       <SidebarProvider defaultOpen={false}>
-        <div className="flex h-screen w-full overflow-hidden">
+        <div
+          className={`flex h-screen w-full overflow-hidden ${isSaving ? "pointer-events-none" : ""}`}
+        >
           <Sidebar className="border-r border-sidebar-border bg-white">
             <SidebarContent>
               {Object.entries(resumeCategories).map(([category, items]) => {
@@ -4631,6 +4659,25 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
       </Dialog>
       {toast && (
         <Toast message={toast.message} type={toast.type} onClose={hideToast} />
+      )}
+
+      {/* 저장 중 전체 화면 로딩 오버레이 */}
+      {isSaving && (
+        <div className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm flex items-center justify-center pointer-events-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-8 flex flex-col items-center gap-4 min-w-[300px]">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            <div className="text-center">
+              <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                처리 중...
+              </p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                이력서를 저장하고 있습니다.
+                <br />
+                잠시만 기다려주세요.
+              </p>
+            </div>
+          </div>
+        </div>
       )}
     </DndContext>
   );

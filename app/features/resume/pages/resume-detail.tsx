@@ -105,7 +105,19 @@ export const loader = async ({ params, request }: Route.LoaderArgs) => {
   // 공개 이력서이거나 소유자인 경우 데이터 조회
   const data = await getResumeById(supabase, resumeId);
   console.log("resume-detail loader data :>> ", data);
-  return data;
+
+  // 현재 사용자 정보 확인
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // 이력서 소유자인지 확인
+  const isOwner = user?.id === resumeInfo.user_id;
+
+  return {
+    ...data,
+    isOwner,
+  };
 };
 
 export const action = async ({ params, request }: Route.ActionArgs) => {
@@ -468,6 +480,9 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
     languageTests,
     etcs,
   } = loaderData;
+
+  // isOwner는 loaderData에 있을 수도 있고 없을 수도 있음
+  const isOwner = "isOwner" in loaderData ? loaderData.isOwner : false;
   const navigate = useNavigate();
   const params = useParams();
   const resumeId = params.id;
@@ -690,82 +705,94 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
                   className="w-6 h-6 sm:w-8 sm:h-8"
                 />
               </Link>
-              <Button
-                variant="ghost"
-                onClick={() => navigate("/my-resume")}
-                size="sm"
-                className="group text-white hover:text-white/90 hover:bg-gray-800/50 transition-all duration-200 ease-in-out transform hover:scale-105 cursor-pointer text-xs sm:text-sm"
-              >
-                <ArrowLeft className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 transition-transform duration-200 group-hover:-translate-x-1" />
-                <span className="hidden sm:inline">목록으로</span>
-                <span className="sm:hidden">목록</span>
-              </Button>
-              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-white whitespace-nowrap truncate">
-                {resume.title}
-              </h1>
+              {isOwner && (
+                <>
+                  <Button
+                    variant="ghost"
+                    onClick={() => navigate("/my-resume")}
+                    size="sm"
+                    className="group text-white hover:text-white/90 hover:bg-gray-800/50 transition-all duration-200 ease-in-out transform hover:scale-105 cursor-pointer text-xs sm:text-sm"
+                  >
+                    <ArrowLeft className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 transition-transform duration-200 group-hover:-translate-x-1" />
+                    <span className="hidden sm:inline">목록으로</span>
+                    <span className="sm:hidden">목록</span>
+                  </Button>
+                  <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-white whitespace-nowrap truncate">
+                    {resume.title}
+                  </h1>
+                </>
+              )}
             </div>
             <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-              {/* 공개/비공개 스위치 */}
-              <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-md border border-gray-600 bg-gray-800/50">
-                <span className="text-xs sm:text-sm text-white/80">비공개</span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={isPublic}
-                  disabled={fetcher.state === "submitting"}
-                  onClick={() => handlePublicToggle(!isPublic)}
-                  className={cn(
-                    "relative inline-flex h-5 w-9 sm:h-6 sm:w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer",
-                    isPublic ? "bg-green-600" : "bg-gray-600"
-                  )}
-                >
-                  {fetcher.state === "submitting" ? (
-                    <Loader2 className="absolute left-0.5 sm:left-1 h-3 w-3 sm:h-4 sm:w-4 animate-spin text-white" />
-                  ) : (
-                    <span
-                      className={cn(
-                        "inline-block h-3 w-3 sm:h-4 sm:w-4 transform rounded-full bg-white transition-transform",
-                        isPublic
-                          ? "translate-x-5 sm:translate-x-6"
-                          : "translate-x-1"
-                      )}
-                    />
-                  )}
-                </button>
-                <span className="text-xs sm:text-sm text-white/80">공개</span>
-              </div>
+              {/* 공개/비공개 스위치 - 소유자만 표시 */}
+              {isOwner && (
+                <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-md border border-gray-600 bg-gray-800/50">
+                  <span className="text-xs sm:text-sm text-white/80">
+                    비공개
+                  </span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={isPublic}
+                    disabled={fetcher.state === "submitting"}
+                    onClick={() => handlePublicToggle(!isPublic)}
+                    className={cn(
+                      "relative inline-flex h-5 w-9 sm:h-6 sm:w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer",
+                      isPublic ? "bg-green-600" : "bg-gray-600"
+                    )}
+                  >
+                    {fetcher.state === "submitting" ? (
+                      <Loader2 className="absolute left-0.5 sm:left-1 h-3 w-3 sm:h-4 sm:w-4 animate-spin text-white" />
+                    ) : (
+                      <span
+                        className={cn(
+                          "inline-block h-3 w-3 sm:h-4 sm:w-4 transform rounded-full bg-white transition-transform",
+                          isPublic
+                            ? "translate-x-5 sm:translate-x-6"
+                            : "translate-x-1"
+                        )}
+                      />
+                    )}
+                  </button>
+                  <span className="text-xs sm:text-sm text-white/80">공개</span>
+                </div>
+              )}
 
-              <Button
-                variant="outline"
-                onClick={handleEdit}
-                size="sm"
-                className="group text-white border-gray-600 hover:bg-gray-800 hover:text-white hover:border-gray-500 transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95 cursor-pointer text-xs sm:text-sm"
-              >
-                <Edit className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 transition-transform duration-200 group-hover:rotate-12" />
-                <span className="hidden sm:inline">수정</span>
-                <span className="sm:hidden">수정</span>
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setShowDeleteDialog(true)}
-                size="sm"
-                className="group text-white border-gray-600 hover:bg-red-600 hover:text-white hover:border-red-600 transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95 cursor-pointer text-xs sm:text-sm"
-                disabled={fetcher.state === "submitting"}
-              >
-                {fetcher.state === "submitting" ? (
-                  <>
-                    <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 animate-spin" />
-                    <span className="hidden sm:inline">삭제 중...</span>
-                    <span className="sm:hidden">삭제 중</span>
-                  </>
-                ) : (
-                  <>
-                    <Trash2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 transition-transform duration-200 group-hover:rotate-12" />
-                    <span className="hidden sm:inline">삭제</span>
-                    <span className="sm:hidden">삭제</span>
-                  </>
-                )}
-              </Button>
+              {isOwner && (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={handleEdit}
+                    size="sm"
+                    className="group text-white border-gray-600 hover:bg-gray-800 hover:text-white hover:border-gray-500 transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95 cursor-pointer text-xs sm:text-sm"
+                  >
+                    <Edit className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 transition-transform duration-200 group-hover:rotate-12" />
+                    <span className="hidden sm:inline">수정</span>
+                    <span className="sm:hidden">수정</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowDeleteDialog(true)}
+                    size="sm"
+                    className="group text-white border-gray-600 hover:bg-red-600 hover:text-white hover:border-red-600 transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95 cursor-pointer text-xs sm:text-sm"
+                    disabled={fetcher.state === "submitting"}
+                  >
+                    {fetcher.state === "submitting" ? (
+                      <>
+                        <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 animate-spin" />
+                        <span className="hidden sm:inline">삭제 중...</span>
+                        <span className="sm:hidden">삭제 중</span>
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 transition-transform duration-200 group-hover:rotate-12" />
+                        <span className="hidden sm:inline">삭제</span>
+                        <span className="sm:hidden">삭제</span>
+                      </>
+                    )}
+                  </Button>
+                </>
+              )}
               <Button
                 variant="outline"
                 onClick={handleShare}
@@ -1290,43 +1317,46 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
         <Toast message={toast.message} type={toast.type} onClose={hideToast} />
       )}
 
-      {/* 삭제 확인 다이얼로그 */}
-      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <DialogContent className="bg-white dark:bg-gray-800">
-          <DialogClose onClose={() => setShowDeleteDialog(false)} />
-          <DialogHeader>
-            <DialogTitle>이력서 삭제</DialogTitle>
-            <DialogDescription>
-              정말로 이 이력서를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex justify-end gap-3 mt-6">
-            <Button
-              variant="outline"
-              onClick={() => setShowDeleteDialog(false)}
-              disabled={fetcher.state === "submitting"}
-              className="cursor-pointer"
-            >
-              취소
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-              disabled={fetcher.state === "submitting"}
-              className="cursor-pointer"
-            >
-              {fetcher.state === "submitting" ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  삭제 중...
-                </>
-              ) : (
-                "삭제"
-              )}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* 삭제 확인 다이얼로그 - 소유자만 표시 */}
+      {isOwner && (
+        <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+          <DialogContent className="bg-white dark:bg-gray-800">
+            <DialogClose onClose={() => setShowDeleteDialog(false)} />
+            <DialogHeader>
+              <DialogTitle>이력서 삭제</DialogTitle>
+              <DialogDescription>
+                정말로 이 이력서를 삭제하시겠습니까? 이 작업은 되돌릴 수
+                없습니다.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex justify-end gap-3 mt-6">
+              <Button
+                variant="outline"
+                onClick={() => setShowDeleteDialog(false)}
+                disabled={fetcher.state === "submitting"}
+                className="cursor-pointer"
+              >
+                취소
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleDelete}
+                disabled={fetcher.state === "submitting"}
+                className="cursor-pointer"
+              >
+                {fetcher.state === "submitting" ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    삭제 중...
+                  </>
+                ) : (
+                  "삭제"
+                )}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
