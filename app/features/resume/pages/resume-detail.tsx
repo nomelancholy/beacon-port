@@ -1164,8 +1164,13 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
                       {getDisplayValue("기관명", edu.institution)}
                     </h3>
                     {edu.major && (
-                      <div className="mb-2 text-sm sm:text-base text-gray-700 dark:text-gray-300">
-                        {getDisplayValue("전공", edu.major)}
+                      <div className="mb-2 flex items-center gap-2">
+                        <span className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                          전공
+                        </span>
+                        <span className="text-sm sm:text-base text-gray-600 dark:text-gray-400 font-medium">
+                          {edu.major}
+                        </span>
                       </div>
                     )}
                     {period && (

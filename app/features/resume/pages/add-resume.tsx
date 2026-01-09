@@ -333,18 +333,29 @@ export const action = async ({ request }: Route.ActionArgs) => {
       // 필수 필드 검증 (zod 스키마)
       const validationErrors: string[] = [];
 
-      // 1. Experiences 검증
-      const experienceKeys = Array.from(formData.keys()).filter((key) =>
-        key.startsWith("Experience_")
-      );
-      const experienceItemIds = [
-        ...new Set(
-          experienceKeys.map((key) => {
-            const parts = key.split("_");
-            return parts[0] + "_" + parts[1]; // "Experience_xxx"
-          })
-        ),
-      ];
+      // 1. Experiences 검증 및 순서 처리
+      const experienceOrderStr = formData.get("_order_Experience");
+      let experienceItemIds: string[] = [];
+      
+      if (experienceOrderStr) {
+        const experienceOrder = JSON.parse(experienceOrderStr as string) as string[];
+        experienceItemIds = experienceOrder.filter((itemId) => {
+          const company = formData.get(`${itemId}_회사명`);
+          return company !== null;
+        });
+      } else {
+        const experienceKeys = Array.from(formData.keys()).filter((key) =>
+          key.startsWith("Experience_")
+        );
+        experienceItemIds = [
+          ...new Set(
+            experienceKeys.map((key) => {
+              const parts = key.split("_");
+              return parts[0] + "_" + parts[1]; // "Experience_xxx"
+            })
+          ),
+        ];
+      }
       if (experienceItemIds.length > 0) {
         experienceItemIds.forEach((itemId, index) => {
           const company = formData.get(`${itemId}_회사명`) as string;
@@ -356,18 +367,29 @@ export const action = async ({ request }: Route.ActionArgs) => {
         });
       }
 
-      // 2. Side Projects 검증
-      const sideProjectKeys = Array.from(formData.keys()).filter((key) =>
-        key.startsWith("Side Project_")
-      );
-      const sideProjectItemIds = [
-        ...new Set(
-          sideProjectKeys.map((key) => {
-            const match = key.match(/^(Side Project_[^_]+)/);
-            return match ? match[1] : null;
-          })
-        ),
-      ].filter((id) => id !== null) as string[];
+      // 2. Side Projects 검증 및 순서 처리
+      const sideProjectOrderStr = formData.get("_order_Side Project");
+      let sideProjectItemIds: string[] = [];
+      
+      if (sideProjectOrderStr) {
+        const sideProjectOrder = JSON.parse(sideProjectOrderStr as string) as string[];
+        sideProjectItemIds = sideProjectOrder.filter((itemId) => {
+          const name = formData.get(`${itemId}_프로젝트명`);
+          return name !== null;
+        });
+      } else {
+        const sideProjectKeys = Array.from(formData.keys()).filter((key) =>
+          key.startsWith("Side Project_")
+        );
+        sideProjectItemIds = [
+          ...new Set(
+            sideProjectKeys.map((key) => {
+              const match = key.match(/^(Side Project_[^_]+)/);
+              return match ? match[1] : null;
+            })
+          ),
+        ].filter((id) => id !== null) as string[];
+      }
       if (sideProjectItemIds.length > 0) {
         sideProjectItemIds.forEach((itemId, index) => {
           const name = formData.get(`${itemId}_프로젝트명`) as string;
@@ -379,18 +401,34 @@ export const action = async ({ request }: Route.ActionArgs) => {
         });
       }
 
-      // 3. Educations 검증
-      const educationKeys = Array.from(formData.keys()).filter((key) =>
-        key.startsWith("Education_")
-      );
-      const educationItemIds = [
-        ...new Set(
-          educationKeys.map((key) => {
-            const parts = key.split("_");
-            return parts[0] + "_" + parts[1]; // "Education_xxx"
-          })
-        ),
-      ];
+      // 3. Educations 검증 및 순서 처리
+      // dynamicItems의 순서를 사용하여 드래그 순서 보존
+      const educationOrderStr = formData.get("_order_Education");
+      let educationItemIds: string[] = [];
+      
+      if (educationOrderStr) {
+        // 순서 정보가 있으면 그 순서 사용
+        const educationOrder = JSON.parse(educationOrderStr as string) as string[];
+        educationItemIds = educationOrder.filter((itemId) => {
+          // 해당 항목이 실제로 formData에 있는지 확인
+          const institution = formData.get(`${itemId}_기관명`);
+          return institution !== null;
+        });
+      } else {
+        // 순서 정보가 없으면 기존 방식 사용 (하위 호환성)
+        const educationKeys = Array.from(formData.keys()).filter((key) =>
+          key.startsWith("Education_")
+        );
+        educationItemIds = [
+          ...new Set(
+            educationKeys.map((key) => {
+              const parts = key.split("_");
+              return parts[0] + "_" + parts[1]; // "Education_xxx"
+            })
+          ),
+        ];
+      }
+      
       if (educationItemIds.length > 0) {
         educationItemIds.forEach((itemId, index) => {
           const institution = formData.get(`${itemId}_기관명`) as string;
@@ -402,20 +440,31 @@ export const action = async ({ request }: Route.ActionArgs) => {
         });
       }
 
-      // 4. Certifications 검증
-      const certificationKeys = Array.from(formData.keys()).filter((key) =>
-        key.startsWith("자격증_")
-      );
-      const certificationItemIds = [
-        ...new Set(
-          certificationKeys
-            .map((key) => {
-              const match = key.match(/^(자격증_[^_]+)/);
-              return match ? match[1] : null;
-            })
-            .filter((id) => id !== null)
-        ),
-      ] as string[];
+      // 4. Certifications 검증 및 순서 처리
+      const certificationOrderStr = formData.get("_order_자격증");
+      let certificationItemIds: string[] = [];
+      
+      if (certificationOrderStr) {
+        const certificationOrder = JSON.parse(certificationOrderStr as string) as string[];
+        certificationItemIds = certificationOrder.filter((itemId) => {
+          const name = formData.get(`${itemId}_자격증명`);
+          return name !== null;
+        });
+      } else {
+        const certificationKeys = Array.from(formData.keys()).filter((key) =>
+          key.startsWith("자격증_")
+        );
+        certificationItemIds = [
+          ...new Set(
+            certificationKeys
+              .map((key) => {
+                const match = key.match(/^(자격증_[^_]+)/);
+                return match ? match[1] : null;
+              })
+              .filter((id) => id !== null)
+          ),
+        ] as string[];
+      }
       if (certificationItemIds.length > 0) {
         certificationItemIds.forEach((itemId, index) => {
           const name = formData.get(`${itemId}_자격증명`) as string;
@@ -1836,9 +1885,9 @@ const EducationCard = React.memo(
             <div>
               <label
                 htmlFor={`${itemId}_전공`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                className="block text-xs font-medium text-gray-400 dark:text-gray-500 mb-1.5"
               >
-                전공
+                전공 (선택사항)
               </label>
               <Input
                 id={`${itemId}_전공`}
@@ -1848,6 +1897,7 @@ const EducationCard = React.memo(
                   onInputChange(`${itemId}_전공`, e.target.value)
                 }
                 placeholder="전공을 입력하세요"
+                className="text-gray-600 dark:text-gray-400 placeholder:text-gray-400 dark:placeholder:text-gray-500"
               />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -2827,6 +2877,11 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
     formDataToSubmit.append("intent", "save-resume");
     formDataToSubmit.append("title", resumeTitle.trim());
 
+    // dynamicItems의 순서 정보를 formData에 추가 (드래그 순서 보존)
+    Object.entries(dynamicItems).forEach(([category, items]) => {
+      formDataToSubmit.append(`_order_${category}`, JSON.stringify(items));
+    });
+
     // 기존 formData의 모든 필드를 추가
     Object.entries(formData).forEach(([key, value]) => {
       formDataToSubmit.append(key, value);
@@ -3668,11 +3723,16 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
                     >
                       {getDisplayValue("기관명", institution)}
                     </h3>
-                    <div
-                      className={`mb-2 text-sm sm:text-base ${!major ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
-                    >
-                      {getDisplayValue("전공", major)}
-                    </div>
+                    {major && (
+                      <div className="mb-2">
+                        <span className="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide mr-2">
+                          전공
+                        </span>
+                        <span className="text-sm sm:text-base text-gray-600 dark:text-gray-400 font-medium">
+                          {major}
+                        </span>
+                      </div>
+                    )}
                     {period && (
                       <div
                         className={`mb-2 text-sm sm:text-base ${!startDate || !endDate ? "text-gray-400 dark:text-gray-500 italic" : "text-gray-700 dark:text-gray-300"}`}
