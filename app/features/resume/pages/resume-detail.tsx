@@ -931,13 +931,158 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
             </section>
           )}
 
+          {/* Skill Stack 섹션 */}
+          {(() => {
+            // 스킬 사용 기간 계산 함수
+            const calculateSkillDurations = () => {
+              const skillMap = new Map<string, number>(); // skillName -> total months
+
+              // Experience 스킬 수집
+              experiences.forEach((exp: any) => {
+                if (!exp.skills || !exp.skills.length || !exp.start_date)
+                  return;
+
+                // 기간 계산 (월 단위)
+                const start = new Date(exp.start_date);
+                const end = exp.end_date ? new Date(exp.end_date) : new Date();
+                const months = Math.max(
+                  0,
+                  (end.getFullYear() - start.getFullYear()) * 12 +
+                    (end.getMonth() - start.getMonth()) +
+                    1
+                );
+
+                // 스킬별로 기간 누적
+                exp.skills.forEach((skill: any) => {
+                  if (skill && skill.name) {
+                    const skillName = skill.name;
+                    const current = skillMap.get(skillName) || 0;
+                    skillMap.set(skillName, current + months);
+                  }
+                });
+              });
+
+              // Side Project 스킬 수집
+              sideProjects.forEach((project: any) => {
+                if (
+                  !project.skills ||
+                  !project.skills.length ||
+                  !project.start_date
+                )
+                  return;
+
+                // 기간 계산 (월 단위)
+                const start = new Date(project.start_date);
+                const end = project.end_date
+                  ? new Date(project.end_date)
+                  : new Date();
+                const months = Math.max(
+                  0,
+                  (end.getFullYear() - start.getFullYear()) * 12 +
+                    (end.getMonth() - start.getMonth()) +
+                    1
+                );
+
+                // 스킬별로 기간 누적
+                project.skills.forEach((skill: any) => {
+                  if (skill && skill.name) {
+                    const skillName = skill.name;
+                    const current = skillMap.get(skillName) || 0;
+                    skillMap.set(skillName, current + months);
+                  }
+                });
+              });
+
+              // 상위 6개 추출 및 년/개월 정보 포함
+              return Array.from(skillMap.entries())
+                .map(([name, months]) => {
+                  const years = Math.floor(months / 12);
+                  const remainingMonths = months % 12;
+                  let displayText = "";
+                  if (years === 0) {
+                    displayText = `${remainingMonths}개월`;
+                  } else if (remainingMonths === 0) {
+                    displayText = `${years}년`;
+                  } else {
+                    displayText = `${years}년 ${remainingMonths}개월`;
+                  }
+                  return {
+                    name,
+                    months,
+                    years: months / 12, // 차트용 (소수점)
+                    displayText,
+                  };
+                })
+                .sort((a, b) => b.months - a.months)
+                .slice(0, 6);
+            };
+
+            const topSkills = calculateSkillDurations();
+
+            if (topSkills.length === 0) return null;
+
+            return (
+              <section className="mb-6 sm:mb-10">
+                <hr className="border-gray-300 dark:border-gray-600 mb-3 sm:mb-4" />
+                <h2 className="text-xl sm:text-2xl font-bold mb-2 text-gray-900 dark:text-gray-100">
+                  Skill Stack
+                </h2>
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-4 sm:mb-6">
+                  사용 기간이 가장 긴 6개의 스킬만 표시됩니다
+                </p>
+                <div className="w-full">
+                  <SkillStackChart data={topSkills} />
+                </div>
+              </section>
+            );
+          })()}
+
           {/* Experience 섹션 */}
           {experiences.length > 0 && (
             <section className="mb-6 sm:mb-10">
               <hr className="border-gray-300 dark:border-gray-600 mb-3 sm:mb-4" />
-              <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-gray-900 dark:text-gray-100">
-                Experience
-              </h2>
+              <div className="flex items-center gap-3 mb-4 sm:mb-6">
+                <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
+                  Experience
+                </h2>
+                {(() => {
+                  // 총 경력 기간 계산
+                  let totalMonths = 0;
+                  experiences.forEach((exp: any) => {
+                    if (!exp.start_date) return;
+                    const start = new Date(exp.start_date);
+                    const end = exp.end_date
+                      ? new Date(exp.end_date)
+                      : new Date();
+                    const months = Math.max(
+                      0,
+                      (end.getFullYear() - start.getFullYear()) * 12 +
+                        (end.getMonth() - start.getMonth()) +
+                        1
+                    );
+                    totalMonths += months;
+                  });
+
+                  if (totalMonths === 0) return null;
+
+                  const years = Math.floor(totalMonths / 12);
+                  const remainingMonths = totalMonths % 12;
+                  let displayText = "";
+                  if (years === 0) {
+                    displayText = `${remainingMonths}개월`;
+                  } else if (remainingMonths === 0) {
+                    displayText = `${years}년`;
+                  } else {
+                    displayText = `${years}년 ${remainingMonths}개월`;
+                  }
+
+                  return (
+                    <span className="text-sm sm:text-base text-gray-600 dark:text-gray-400 font-normal">
+                      ({displayText})
+                    </span>
+                  );
+                })()}
+              </div>
               {experiences.map((exp: any) => {
                 const period = formatPeriod(
                   exp.start_date,
@@ -1063,112 +1208,6 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
               })}
             </section>
           )}
-
-          {/* 스킬 스택 그래프 섹션 */}
-          {(() => {
-            // 스킬 사용 기간 계산 함수
-            const calculateSkillDurations = () => {
-              const skillMap = new Map<string, number>(); // skillName -> total months
-
-              // Experience 스킬 수집
-              experiences.forEach((exp: any) => {
-                if (!exp.skills || !exp.skills.length || !exp.start_date)
-                  return;
-
-                // 기간 계산 (월 단위)
-                const start = new Date(exp.start_date);
-                const end = exp.end_date ? new Date(exp.end_date) : new Date();
-                const months = Math.max(
-                  0,
-                  (end.getFullYear() - start.getFullYear()) * 12 +
-                    (end.getMonth() - start.getMonth()) +
-                    1
-                );
-
-                // 스킬별로 기간 누적
-                exp.skills.forEach((skill: any) => {
-                  if (skill && skill.name) {
-                    const skillName = skill.name;
-                    const current = skillMap.get(skillName) || 0;
-                    skillMap.set(skillName, current + months);
-                  }
-                });
-              });
-
-              // Side Project 스킬 수집
-              sideProjects.forEach((project: any) => {
-                if (
-                  !project.skills ||
-                  !project.skills.length ||
-                  !project.start_date
-                )
-                  return;
-
-                // 기간 계산 (월 단위)
-                const start = new Date(project.start_date);
-                const end = project.end_date
-                  ? new Date(project.end_date)
-                  : new Date();
-                const months = Math.max(
-                  0,
-                  (end.getFullYear() - start.getFullYear()) * 12 +
-                    (end.getMonth() - start.getMonth()) +
-                    1
-                );
-
-                // 스킬별로 기간 누적
-                project.skills.forEach((skill: any) => {
-                  if (skill && skill.name) {
-                    const skillName = skill.name;
-                    const current = skillMap.get(skillName) || 0;
-                    skillMap.set(skillName, current + months);
-                  }
-                });
-              });
-
-              // 상위 6개 추출 및 년/개월 정보 포함
-              return Array.from(skillMap.entries())
-                .map(([name, months]) => {
-                  const years = Math.floor(months / 12);
-                  const remainingMonths = months % 12;
-                  let displayText = "";
-                  if (years === 0) {
-                    displayText = `${remainingMonths}개월`;
-                  } else if (remainingMonths === 0) {
-                    displayText = `${years}년`;
-                  } else {
-                    displayText = `${years}년 ${remainingMonths}개월`;
-                  }
-                  return {
-                    name,
-                    months,
-                    years: months / 12, // 차트용 (소수점)
-                    displayText,
-                  };
-                })
-                .sort((a, b) => b.months - a.months)
-                .slice(0, 6);
-            };
-
-            const topSkills = calculateSkillDurations();
-
-            if (topSkills.length === 0) return null;
-
-            return (
-              <section className="mb-6 sm:mb-10">
-                <hr className="border-gray-300 dark:border-gray-600 mb-3 sm:mb-4" />
-                <h2 className="text-xl sm:text-2xl font-bold mb-2 text-gray-900 dark:text-gray-100">
-                  스킬 스택 그래프
-                </h2>
-                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-4 sm:mb-6">
-                  사용 기간이 가장 긴 6개의 스킬만 표시됩니다
-                </p>
-                <div className="w-full">
-                  <SkillStackChart data={topSkills} />
-                </div>
-              </section>
-            );
-          })()}
 
           {/* Education 섹션 */}
           {educations.length > 0 && (
