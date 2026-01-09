@@ -2814,14 +2814,12 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
         })
       ),
     ];
+    // 경력 항목의 시작일은 필수가 아님 (schema.ts에서 nullable)
+    // 회사명만 필수로 검증
     for (const itemId of experienceItemIds) {
       const company = formData[`${itemId}_회사명`];
-      const role = formData[`${itemId}_Role`];
-      const startDate = formData[`${itemId}_시작일`];
-
-      // 회사명이나 Role이 있으면 시작일은 필수
-      if ((company || role) && !startDate) {
-        showToast("경력 항목의 시작일을 입력해주세요.", "error");
+      if (!company || company.trim() === "") {
+        showToast("경력 항목의 회사명을 입력해주세요.", "error");
         return;
       }
     }
