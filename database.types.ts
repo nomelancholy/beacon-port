@@ -16,26 +16,26 @@ export type Database = {
     Tables: {
       certifications: {
         Row: {
-          acquisition_date: string
+          acquisition_date: string | null
           display_order: number
           id: string
-          issuer: string
+          issuer: string | null
           name: string
           resume_id: string | null
         }
         Insert: {
-          acquisition_date: string
+          acquisition_date?: string | null
           display_order?: number
           id?: string
-          issuer: string
+          issuer?: string | null
           name: string
           resume_id?: string | null
         }
         Update: {
-          acquisition_date?: string
+          acquisition_date?: string | null
           display_order?: number
           id?: string
-          issuer?: string
+          issuer?: string | null
           name?: string
           resume_id?: string | null
         }
@@ -58,7 +58,7 @@ export type Database = {
           institution: string
           major: string | null
           resume_id: string | null
-          start_date: string
+          start_date: string | null
         }
         Insert: {
           description?: string | null
@@ -68,7 +68,7 @@ export type Database = {
           institution: string
           major?: string | null
           resume_id?: string | null
-          start_date: string
+          start_date?: string | null
         }
         Update: {
           description?: string | null
@@ -78,7 +78,7 @@ export type Database = {
           institution?: string
           major?: string | null
           resume_id?: string | null
-          start_date?: string
+          start_date?: string | null
         }
         Relationships: [
           {
@@ -163,8 +163,8 @@ export type Database = {
           end_date: string | null
           id: string
           resume_id: string | null
-          role: string
-          start_date: string
+          role: string | null
+          start_date: string | null
         }
         Insert: {
           company: string
@@ -173,8 +173,8 @@ export type Database = {
           end_date?: string | null
           id?: string
           resume_id?: string | null
-          role: string
-          start_date: string
+          role?: string | null
+          start_date?: string | null
         }
         Update: {
           company?: string
@@ -183,8 +183,8 @@ export type Database = {
           end_date?: string | null
           id?: string
           resume_id?: string | null
-          role?: string
-          start_date?: string
+          role?: string | null
+          start_date?: string | null
         }
         Relationships: [
           {
@@ -202,24 +202,24 @@ export type Database = {
           id: string
           name: string
           resume_id: string | null
-          score: string
-          test_date: string
+          score: string | null
+          test_date: string | null
         }
         Insert: {
           display_order?: number
           id?: string
           name: string
           resume_id?: string | null
-          score: string
-          test_date: string
+          score?: string | null
+          test_date?: string | null
         }
         Update: {
           display_order?: number
           id?: string
           name?: string
           resume_id?: string | null
-          score?: string
-          test_date?: string
+          score?: string | null
+          test_date?: string | null
         }
         Relationships: [
           {
@@ -377,7 +377,7 @@ export type Database = {
           link: string | null
           name: string
           resume_id: string | null
-          start_date: string
+          start_date: string | null
         }
         Insert: {
           description?: string | null
@@ -387,7 +387,7 @@ export type Database = {
           link?: string | null
           name: string
           resume_id?: string | null
-          start_date: string
+          start_date?: string | null
         }
         Update: {
           description?: string | null
@@ -397,7 +397,7 @@ export type Database = {
           link?: string | null
           name?: string
           resume_id?: string | null
-          start_date?: string
+          start_date?: string | null
         }
         Relationships: [
           {

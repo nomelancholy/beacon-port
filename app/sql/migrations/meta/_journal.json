@@ -64,6 +64,20 @@
       "when": 1767874126080,
       "tag": "0008_futuristic_namora",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1767914581546,
+      "tag": "0009_mysterious_trauma",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1767914896765,
+      "tag": "0010_broad_eternals",
+      "breakpoints": true
     }
   ]
 }

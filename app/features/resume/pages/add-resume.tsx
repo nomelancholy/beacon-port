@@ -4,6 +4,7 @@ import { useNavigate, useFetcher } from "react-router";
 import { createSupabaseServerClient } from "~/supabase/server";
 import { redirect } from "react-router";
 import { getResumeById } from "../queries";
+import { z } from "zod";
 import {
   ChevronDown,
   Github,
@@ -329,8 +330,10 @@ export const action = async ({ request }: Route.ActionArgs) => {
         resumeId = resume.id;
       }
 
-      // 동적 항목들 저장
-      // 1. Experiences
+      // 필수 필드 검증 (zod 스키마)
+      const validationErrors: string[] = [];
+
+      // 1. Experiences 검증
       const experienceKeys = Array.from(formData.keys()).filter((key) =>
         key.startsWith("Experience_")
       );
@@ -343,6 +346,143 @@ export const action = async ({ request }: Route.ActionArgs) => {
         ),
       ];
       if (experienceItemIds.length > 0) {
+        experienceItemIds.forEach((itemId, index) => {
+          const company = formData.get(`${itemId}_회사명`) as string;
+          if (!company || company.trim() === "") {
+            validationErrors.push(
+              `경력 ${index + 1}: 회사명은 필수 입력 항목입니다.`
+            );
+          }
+        });
+      }
+
+      // 2. Side Projects 검증
+      const sideProjectKeys = Array.from(formData.keys()).filter((key) =>
+        key.startsWith("Side Project_")
+      );
+      const sideProjectItemIds = [
+        ...new Set(
+          sideProjectKeys.map((key) => {
+            const match = key.match(/^(Side Project_[^_]+)/);
+            return match ? match[1] : null;
+          })
+        ),
+      ].filter((id) => id !== null) as string[];
+      if (sideProjectItemIds.length > 0) {
+        sideProjectItemIds.forEach((itemId, index) => {
+          const name = formData.get(`${itemId}_프로젝트명`) as string;
+          if (!name || name.trim() === "") {
+            validationErrors.push(
+              `사이드 프로젝트 ${index + 1}: 프로젝트명은 필수 입력 항목입니다.`
+            );
+          }
+        });
+      }
+
+      // 3. Educations 검증
+      const educationKeys = Array.from(formData.keys()).filter((key) =>
+        key.startsWith("Education_")
+      );
+      const educationItemIds = [
+        ...new Set(
+          educationKeys.map((key) => {
+            const parts = key.split("_");
+            return parts[0] + "_" + parts[1]; // "Education_xxx"
+          })
+        ),
+      ];
+      if (educationItemIds.length > 0) {
+        educationItemIds.forEach((itemId, index) => {
+          const institution = formData.get(`${itemId}_기관명`) as string;
+          if (!institution || institution.trim() === "") {
+            validationErrors.push(
+              `교육 ${index + 1}: 기관명은 필수 입력 항목입니다.`
+            );
+          }
+        });
+      }
+
+      // 4. Certifications 검증
+      const certificationKeys = Array.from(formData.keys()).filter((key) =>
+        key.startsWith("자격증_")
+      );
+      const certificationItemIds = [
+        ...new Set(
+          certificationKeys
+            .map((key) => {
+              const match = key.match(/^(자격증_[^_]+)/);
+              return match ? match[1] : null;
+            })
+            .filter((id) => id !== null)
+        ),
+      ] as string[];
+      if (certificationItemIds.length > 0) {
+        certificationItemIds.forEach((itemId, index) => {
+          const name = formData.get(`${itemId}_자격증명`) as string;
+          if (!name || name.trim() === "") {
+            validationErrors.push(
+              `자격증 ${index + 1}: 자격증명은 필수 입력 항목입니다.`
+            );
+          }
+        });
+      }
+
+      // 5. Language Tests 검증
+      const languageTestKeys = Array.from(formData.keys()).filter((key) =>
+        key.startsWith("어학성적_")
+      );
+      const languageTestItemIds = [
+        ...new Set(
+          languageTestKeys.map(
+            (key) => key.split("_")[0] + "_" + key.split("_")[1]
+          )
+        ),
+      ];
+      if (languageTestItemIds.length > 0) {
+        languageTestItemIds.forEach((itemId, index) => {
+          const name = formData.get(`${itemId}_시험명`) as string;
+          if (!name || name.trim() === "") {
+            validationErrors.push(
+              `어학성적 ${index + 1}: 시험명은 필수 입력 항목입니다.`
+            );
+          }
+        });
+      }
+
+      // 6. Etcs 검증
+      const etcKeys = Array.from(formData.keys()).filter((key) =>
+        key.startsWith("그 외 활동_")
+      );
+      const etcItemIds = [
+        ...new Set(
+          etcKeys.map((key) => {
+            const match = key.match(/^(그 외 활동_[^_]+)/);
+            return match ? match[1] : null;
+          })
+        ),
+      ].filter((id) => id !== null) as string[];
+      if (etcItemIds.length > 0) {
+        etcItemIds.forEach((itemId, index) => {
+          const name = formData.get(`${itemId}_활동명`) as string;
+          if (!name || name.trim() === "") {
+            validationErrors.push(
+              `그 외 활동 ${index + 1}: 활동명은 필수 입력 항목입니다.`
+            );
+          }
+        });
+      }
+
+      // 검증 실패 시 에러 반환
+      if (validationErrors.length > 0) {
+        return {
+          success: false,
+          error: validationErrors.join("\n"),
+        };
+      }
+
+      // 동적 항목들 저장
+      // 1. Experiences
+      if (experienceItemIds.length > 0) {
         const experiencesData = experienceItemIds
           .map((itemId, index) => {
             const company = formData.get(`${itemId}_회사명`) as string;
@@ -352,13 +492,16 @@ export const action = async ({ request }: Route.ActionArgs) => {
             const description = formData.get(`${itemId}_작업내용`) as string;
             const skills = formData.get(`${itemId}_스킬`) as string;
 
-            if (!company || !role || !startDate) return null;
+            // 회사명만 필수 (schema.ts 기준)
+            if (!company || company.trim() === "") return null;
 
             return {
               resume_id: resumeId,
               company,
-              role,
-              start_date: new Date(startDate + "-01").toISOString(),
+              role: role || null,
+              start_date: startDate
+                ? new Date(startDate + "-01").toISOString()
+                : null,
               end_date: endDate
                 ? new Date(endDate + "-01").toISOString()
                 : null,
@@ -515,18 +658,6 @@ export const action = async ({ request }: Route.ActionArgs) => {
       }
 
       // 2. Side Projects
-      const sideProjectKeys = Array.from(formData.keys()).filter((key) =>
-        key.startsWith("Side Project_")
-      );
-      const sideProjectItemIds = [
-        ...new Set(
-          sideProjectKeys.map((key) => {
-            // "Side Project_xxx_프로젝트명" -> "Side Project_xxx"
-            const match = key.match(/^(Side Project_[^_]+)/);
-            return match ? match[1] : null;
-          })
-        ),
-      ].filter((id) => id !== null) as string[];
       if (sideProjectItemIds.length > 0) {
         const sideProjectsData = sideProjectItemIds
           .map((itemId, index) => {
@@ -537,12 +668,15 @@ export const action = async ({ request }: Route.ActionArgs) => {
             const link = formData.get(`${itemId}_링크`) as string;
             const techStack = formData.get(`${itemId}_기술스택`) as string;
 
-            if (!name || !startDate) return null;
+            // 프로젝트명만 필수 (schema.ts 기준)
+            if (!name || name.trim() === "") return null;
 
             return {
               resume_id: resumeId,
               name,
-              start_date: new Date(startDate + "-01").toISOString(),
+              start_date: startDate
+                ? new Date(startDate + "-01").toISOString()
+                : null,
               end_date: endDate
                 ? new Date(endDate + "-01").toISOString()
                 : null,
@@ -557,7 +691,9 @@ export const action = async ({ request }: Route.ActionArgs) => {
         if (sideProjectsData.length > 0) {
           const { data: insertedSideProjects, error: spError } = await supabase
             .from("side_projects")
-            .insert(sideProjectsData.map(({ techStack, ...rest }) => rest))
+            .insert(
+              sideProjectsData.map(({ techStack, ...rest }) => rest)
+            )
             .select("id");
 
           if (spError) {
@@ -700,17 +836,6 @@ export const action = async ({ request }: Route.ActionArgs) => {
       }
 
       // 3. Educations
-      const educationKeys = Array.from(formData.keys()).filter((key) =>
-        key.startsWith("Education_")
-      );
-      const educationItemIds = [
-        ...new Set(
-          educationKeys.map((key) => {
-            const parts = key.split("_");
-            return parts[0] + "_" + parts[1]; // "Education_xxx"
-          })
-        ),
-      ];
       if (educationItemIds.length > 0) {
         const educationsData = educationItemIds
           .map((itemId, index) => {
@@ -720,13 +845,16 @@ export const action = async ({ request }: Route.ActionArgs) => {
             const endDate = formData.get(`${itemId}_종료일`) as string;
             const description = formData.get(`${itemId}_내용`) as string;
 
-            if (!institution || !startDate) return null;
+            // 기관명만 필수 (schema.ts 기준)
+            if (!institution || institution.trim() === "") return null;
 
             return {
               resume_id: resumeId,
               institution,
               major: major || null,
-              start_date: new Date(startDate + "-01").toISOString(),
+              start_date: startDate
+                ? new Date(startDate + "-01").toISOString()
+                : null,
               end_date: endDate
                 ? new Date(endDate + "-01").toISOString()
                 : null,
@@ -747,16 +875,6 @@ export const action = async ({ request }: Route.ActionArgs) => {
       }
 
       // 4. Certifications (자격증)
-      const certificationKeys = Array.from(formData.keys()).filter((key) =>
-        key.startsWith("자격증_")
-      );
-      const certificationItemIds = [
-        ...new Set(
-          certificationKeys.map(
-            (key) => key.split("_")[0] + "_" + key.split("_")[1]
-          )
-        ),
-      ];
       if (certificationItemIds.length > 0) {
         const certificationsData = certificationItemIds
           .map((itemId, index) => {
@@ -764,13 +882,16 @@ export const action = async ({ request }: Route.ActionArgs) => {
             const issuer = formData.get(`${itemId}_발급기관`) as string;
             const acquisitionDate = formData.get(`${itemId}_취득일`) as string;
 
-            if (!name || !issuer || !acquisitionDate) return null;
+            // 자격증명만 필수
+            if (!name || name.trim() === "") return null;
 
             return {
               resume_id: resumeId,
-              name,
-              issuer,
-              acquisition_date: new Date(acquisitionDate + "-01").toISOString(),
+              name: name.trim(),
+              issuer: issuer && issuer.trim() ? issuer.trim() : null,
+              acquisition_date: acquisitionDate
+                ? new Date(acquisitionDate + "-01").toISOString()
+                : null,
               display_order: index,
             };
           })
@@ -787,16 +908,6 @@ export const action = async ({ request }: Route.ActionArgs) => {
       }
 
       // 5. Language Tests (어학성적)
-      const languageTestKeys = Array.from(formData.keys()).filter((key) =>
-        key.startsWith("어학성적_")
-      );
-      const languageTestItemIds = [
-        ...new Set(
-          languageTestKeys.map(
-            (key) => key.split("_")[0] + "_" + key.split("_")[1]
-          )
-        ),
-      ];
       if (languageTestItemIds.length > 0) {
         const languageTestsData = languageTestItemIds
           .map((itemId, index) => {
@@ -827,18 +938,6 @@ export const action = async ({ request }: Route.ActionArgs) => {
       }
 
       // 6. Etcs (그 외 활동)
-      const etcKeys = Array.from(formData.keys()).filter((key) =>
-        key.startsWith("그 외 활동_")
-      );
-      const etcItemIds = [
-        ...new Set(
-          etcKeys.map((key) => {
-            // "그 외 활동_xxx_활동명" -> "그 외 활동_xxx"
-            const match = key.match(/^(그 외 활동_[^_]+)/);
-            return match ? match[1] : null;
-          })
-        ),
-      ].filter((id) => id !== null) as string[];
       if (etcItemIds.length > 0) {
         const etcsData = etcItemIds
           .map((itemId, index) => {
@@ -1344,7 +1443,7 @@ const ExperienceCard = React.memo(
                 htmlFor={`${itemId}_회사명`}
                 className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
               >
-                근무회사명
+                근무회사명 <span className="text-red-500">*</span>
               </label>
               <Input
                 id={`${itemId}_회사명`}
@@ -1533,7 +1632,7 @@ const SideProjectCard = React.memo(
                 htmlFor={`${itemId}_프로젝트명`}
                 className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
               >
-                사이드 프로젝트 명
+                사이드 프로젝트 명 <span className="text-red-500">*</span>
               </label>
               <Input
                 id={`${itemId}_프로젝트명`}
@@ -1722,7 +1821,7 @@ const EducationCard = React.memo(
                 htmlFor={`${itemId}_기관명`}
                 className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
               >
-                교육 기관명
+                교육 기관명 <span className="text-red-500">*</span>
               </label>
               <Input
                 id={`${itemId}_기관명`}
@@ -1895,7 +1994,7 @@ const CertificationCard = React.memo(
                 htmlFor={`${itemId}_자격증명`}
                 className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
               >
-                자격증명
+                자격증명 <span className="text-red-500">*</span>
               </label>
               <Input
                 id={`${itemId}_자격증명`}
@@ -2025,7 +2124,7 @@ const LanguageTestCard = React.memo(
                 htmlFor={`${itemId}_시험명`}
                 className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
               >
-                시험명
+                시험명 <span className="text-red-500">*</span>
               </label>
               <Input
                 id={`${itemId}_시험명`}
@@ -2155,7 +2254,7 @@ const EtcCard = React.memo(
                 htmlFor={`${itemId}_활동명`}
                 className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
               >
-                활동명
+                활동명 <span className="text-red-500">*</span>
               </label>
               <Input
                 id={`${itemId}_활동명`}
