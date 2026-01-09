@@ -231,6 +231,15 @@ export const experienceSkills = pgTable(
   },
   (table) => [
     primaryKey({ columns: [table.experienceId, table.skillId] }),
+    pgPolicy("view_exp_skills", {
+      for: "select",
+      using: sql`EXISTS (
+      SELECT 1 FROM experiences e 
+      JOIN resumes r ON e.resume_id = r.id 
+      WHERE e.id = experience_id 
+      AND (r.is_public = true OR r.user_id = auth.uid())
+    )`,
+    }),
     pgPolicy("manage_exp_skills", {
       for: "all",
       using: sql`EXISTS (
@@ -254,6 +263,15 @@ export const sideProjectSkills = pgTable(
   },
   (table) => [
     primaryKey({ columns: [table.sideProjectId, table.skillId] }),
+    pgPolicy("view_proj_skills", {
+      for: "select",
+      using: sql`EXISTS (
+      SELECT 1 FROM side_projects p 
+      JOIN resumes r ON p.resume_id = r.id 
+      WHERE p.id = side_project_id 
+      AND (r.is_public = true OR r.user_id = auth.uid())
+    )`,
+    }),
     pgPolicy("manage_proj_skills", {
       for: "all",
       using: sql`EXISTS (
