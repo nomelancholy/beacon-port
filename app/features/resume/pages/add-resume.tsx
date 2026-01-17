@@ -152,11 +152,35 @@ const parseMonthToISO = (monthStr: string | null): string | null => {
 // UTC ISO 문자열을 YYYY-MM 형식으로 변환하는 헬퍼 함수
 const formatISOToMonth = (isoStr: string | null): string => {
   if (!isoStr) return "";
-  // UTC 기준으로 파싱하여 YYYY-MM 형식으로 반환
-  const date = new Date(isoStr);
-  const year = date.getUTCFullYear();
-  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-  return `${year}-${month}`;
+  
+  // ISO 문자열에서 직접 YYYY-MM 추출 (가장 안전한 방법)
+  // 형식: "2026-01-01T00:00:00.000Z" 또는 "2026-01-01T00:00:00Z" 또는 "2026-01-01"
+  // 또는 타임스탬프 형식: "2026-01-01 00:00:00" 등
+  const match = isoStr.match(/^(\d{4})-(\d{2})/);
+  if (match) {
+    const year = match[1];
+    const month = match[2];
+    // 월이 유효한지 확인 (01-12)
+    const monthNum = parseInt(month, 10);
+    if (monthNum >= 1 && monthNum <= 12) {
+      return `${year}-${month}`;
+    }
+  }
+  
+  // 매칭 실패 시 Date 객체 사용 (fallback)
+  try {
+    const date = new Date(isoStr);
+    if (isNaN(date.getTime())) {
+      console.warn(`[formatISOToMonth] Invalid date string: ${isoStr}`);
+      return "";
+    }
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+    return `${year}-${month}`;
+  } catch (error) {
+    console.warn(`[formatISOToMonth] Error parsing date: ${isoStr}`, error);
+    return "";
+  }
 };
 
 export const action = async ({ request }: Route.ActionArgs) => {
