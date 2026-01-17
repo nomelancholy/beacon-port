@@ -139,6 +139,26 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   }
 };
 
+// 날짜 문자열(YYYY-MM)을 UTC 기준 ISO 문자열로 변환하는 헬퍼 함수
+const parseMonthToISO = (monthStr: string | null): string | null => {
+  if (!monthStr) return null;
+  const [year, month] = monthStr.split("-");
+  if (!year || !month) return null;
+  // UTC 기준으로 날짜 생성 (월은 0부터 시작하므로 -1)
+  const date = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, 1));
+  return date.toISOString();
+};
+
+// UTC ISO 문자열을 YYYY-MM 형식으로 변환하는 헬퍼 함수
+const formatISOToMonth = (isoStr: string | null): string => {
+  if (!isoStr) return "";
+  // UTC 기준으로 파싱하여 YYYY-MM 형식으로 반환
+  const date = new Date(isoStr);
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+};
+
 export const action = async ({ request }: Route.ActionArgs) => {
   if (request.method === "POST") {
     const headers = new Headers();
@@ -564,12 +584,8 @@ export const action = async ({ request }: Route.ActionArgs) => {
               resume_id: resumeId,
               company,
               role: role || null,
-              start_date: startDate
-                ? new Date(startDate + "-01").toISOString()
-                : null,
-              end_date: endDate
-                ? new Date(endDate + "-01").toISOString()
-                : null,
+              start_date: parseMonthToISO(startDate),
+              end_date: parseMonthToISO(endDate),
               description: description || null,
               display_order: index,
               skills: skills || "", // 기술 스택은 별도로 저장
@@ -739,12 +755,8 @@ export const action = async ({ request }: Route.ActionArgs) => {
             return {
               resume_id: resumeId,
               name,
-              start_date: startDate
-                ? new Date(startDate + "-01").toISOString()
-                : null,
-              end_date: endDate
-                ? new Date(endDate + "-01").toISOString()
-                : null,
+              start_date: parseMonthToISO(startDate),
+              end_date: parseMonthToISO(endDate),
               description: description || null,
               link: link || null,
               display_order: index,
@@ -915,12 +927,8 @@ export const action = async ({ request }: Route.ActionArgs) => {
               resume_id: resumeId,
               institution,
               major: major || null,
-              start_date: startDate
-                ? new Date(startDate + "-01").toISOString()
-                : null,
-              end_date: endDate
-                ? new Date(endDate + "-01").toISOString()
-                : null,
+              start_date: parseMonthToISO(startDate),
+              end_date: parseMonthToISO(endDate),
               description: description || null,
               display_order: index,
             };
@@ -952,9 +960,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
               resume_id: resumeId,
               name: name.trim(),
               issuer: issuer && issuer.trim() ? issuer.trim() : null,
-              acquisition_date: acquisitionDate
-                ? new Date(acquisitionDate + "-01").toISOString()
-                : null,
+              acquisition_date: parseMonthToISO(acquisitionDate),
               display_order: index,
             };
           })
@@ -984,7 +990,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
               resume_id: resumeId,
               name,
               score,
-              test_date: new Date(testDate + "-01").toISOString(),
+              test_date: parseMonthToISO(testDate) || new Date().toISOString(),
               display_order: index,
             };
           })
@@ -2553,12 +2559,8 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
         selectedFields[itemId] = true;
         formData[`${itemId}_회사명`] = exp.company || "";
         formData[`${itemId}_Role`] = exp.role || "";
-        formData[`${itemId}_시작일`] = exp.start_date
-          ? new Date(exp.start_date).toISOString().slice(0, 7)
-          : "";
-        formData[`${itemId}_종료일`] = exp.end_date
-          ? new Date(exp.end_date).toISOString().slice(0, 7)
-          : "";
+        formData[`${itemId}_시작일`] = formatISOToMonth(exp.start_date);
+        formData[`${itemId}_종료일`] = formatISOToMonth(exp.end_date);
         formData[`${itemId}_작업내용`] = exp.description || "";
         if (exp.skills && exp.skills.length > 0) {
           formData[`${itemId}_스킬`] = exp.skills
@@ -2576,12 +2578,8 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
         dynamicItems["Side Project"].push(itemId);
         selectedFields[itemId] = true;
         formData[`${itemId}_프로젝트명`] = sp.name || "";
-        formData[`${itemId}_시작일`] = sp.start_date
-          ? new Date(sp.start_date).toISOString().slice(0, 7)
-          : "";
-        formData[`${itemId}_종료일`] = sp.end_date
-          ? new Date(sp.end_date).toISOString().slice(0, 7)
-          : "";
+        formData[`${itemId}_시작일`] = formatISOToMonth(sp.start_date);
+        formData[`${itemId}_종료일`] = formatISOToMonth(sp.end_date);
         formData[`${itemId}_링크`] = sp.link || "";
         formData[`${itemId}_주요작업`] = sp.description || "";
         if (sp.skills && sp.skills.length > 0) {
@@ -2601,12 +2599,8 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
         selectedFields[itemId] = true;
         formData[`${itemId}_기관명`] = edu.institution || "";
         formData[`${itemId}_전공`] = edu.major || "";
-        formData[`${itemId}_시작일`] = edu.start_date
-          ? new Date(edu.start_date).toISOString().slice(0, 7)
-          : "";
-        formData[`${itemId}_종료일`] = edu.end_date
-          ? new Date(edu.end_date).toISOString().slice(0, 7)
-          : "";
+        formData[`${itemId}_시작일`] = formatISOToMonth(edu.start_date);
+        formData[`${itemId}_종료일`] = formatISOToMonth(edu.end_date);
         formData[`${itemId}_내용`] = edu.description || "";
       });
     }
@@ -2620,9 +2614,7 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
         selectedFields[itemId] = true;
         formData[`${itemId}_자격증명`] = cert.name || "";
         formData[`${itemId}_발급기관`] = cert.issuer || "";
-        formData[`${itemId}_취득일`] = cert.acquisition_date
-          ? new Date(cert.acquisition_date).toISOString().slice(0, 7)
-          : "";
+        formData[`${itemId}_취득일`] = formatISOToMonth(cert.acquisition_date);
       });
     }
 
@@ -2635,9 +2627,7 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
         selectedFields[itemId] = true;
         formData[`${itemId}_시험명`] = test.name || "";
         formData[`${itemId}_점수`] = test.score || "";
-        formData[`${itemId}_응시일자`] = test.test_date
-          ? new Date(test.test_date).toISOString().slice(0, 7)
-          : "";
+        formData[`${itemId}_응시일자`] = formatISOToMonth(test.test_date);
       });
     }
 
