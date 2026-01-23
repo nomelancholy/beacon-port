@@ -1,0 +1,1 @@
+ALTER TABLE "resumes" ADD COLUMN "skill_stack_selected" text;

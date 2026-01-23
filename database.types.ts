@@ -276,6 +276,7 @@ export type Database = {
           phone: string | null
           photo: string | null
           role: string | null
+          skill_stack_selected: string | null
           title: string
           updated_at: string
           user_id: string | null
@@ -299,6 +300,7 @@ export type Database = {
           phone?: string | null
           photo?: string | null
           role?: string | null
+          skill_stack_selected?: string | null
           title: string
           updated_at?: string
           user_id?: string | null
@@ -322,6 +324,7 @@ export type Database = {
           phone?: string | null
           photo?: string | null
           role?: string | null
+          skill_stack_selected?: string | null
           title?: string
           updated_at?: string
           user_id?: string | null

@@ -359,16 +359,27 @@ const SkillStackChart = React.memo(
 
     // 가장 긴 막대의 값을 찾아서 domain을 조정하여 우측 여백 생성
     const maxValue = Math.max(...chartData.map((d) => d.years));
-    // 모바일에서는 더 큰 여백을 위해 domain을 더 크게 설정
-    const domainMax = isMobile ? maxValue * 1.35 : maxValue * 1.18;
-    // 모바일에서는 margin도 더 크게 설정
-    const rightMargin = isMobile ? 24 : 16;
+    // 짧은 막대의 텍스트도 잘리지 않도록 충분한 여백 확보
+    // 최소값을 보장하여 짧은 경력도 텍스트가 잘리지 않도록 함
+    const minDomainForShortBars = 0.5; // 짧은 막대를 위한 최소 domain 값
+    const domainMax = Math.max(
+      minDomainForShortBars,
+      isMobile ? maxValue * 1.5 : maxValue * 1.3
+    );
+    // 텍스트가 잘리지 않도록 우측 여백을 충분히 확보
+    const rightMargin = isMobile ? 80 : 70;
 
-    // 스킬 개수에 따라 높이 동적 계산 (각 막대 20px, 최소 60px)
+    // 스킬 개수에 따라 높이 동적 계산
+    // 기술 이름이 잘리지 않도록 충분한 높이 확보
     const skillCount = chartData.length;
-    const barHeight = 28; // 각 막대 높이
-    const minHeight = 60; // 최소 높이
-    const calculatedHeight = Math.max(minHeight, skillCount * barHeight);
+    const barSize = 36; // 막대 높이 (기술 이름이 잘리지 않도록 충분히)
+    const barCategoryGap = 12; // 막대 사이 간격
+    const minHeight = 80; // 최소 높이
+    // 각 막대 높이 + 간격을 고려한 전체 높이 계산
+    const calculatedHeight = Math.max(
+      minHeight,
+      skillCount * (barSize + barCategoryGap) + barCategoryGap
+    );
 
     return (
       <div className="w-full" style={{ height: calculatedHeight }}>
@@ -380,12 +391,12 @@ const SkillStackChart = React.memo(
             accessibilityLayer
             data={chartData}
             layout="vertical"
-            barCategoryGap={2}
+            barCategoryGap={barCategoryGap}
             height={calculatedHeight}
             margin={{
               right: rightMargin,
-              top: 2,
-              bottom: 2,
+              top: 8,
+              bottom: 8,
             }}
           >
             <CartesianGrid horizontal={false} />
@@ -402,7 +413,7 @@ const SkillStackChart = React.memo(
               dataKey="years"
               fill="var(--color-years)"
               radius={4}
-              barSize={20}
+              barSize={barSize}
             >
               <LabelList
                 dataKey="skill"
@@ -933,7 +944,23 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
 
           {/* Skill Stack 섹션 */}
           {(() => {
-            // 스킬 사용 기간 계산 함수
+            // 선택한 기술 목록 가져오기
+            const selectedSkillsStr = resume?.skill_stack_selected;
+            let selectedSkills: string[] = [];
+            
+            if (selectedSkillsStr) {
+              try {
+                selectedSkills = JSON.parse(selectedSkillsStr);
+              } catch {
+                // JSON 파싱 실패 시 빈 배열
+                selectedSkills = [];
+              }
+            }
+
+            // 선택한 기술이 없으면 표시하지 않음
+            if (!selectedSkills || selectedSkills.length === 0) return null;
+
+            // 스킬 사용 기간 계산 함수 (선택한 기술만)
             const calculateSkillDurations = () => {
               const skillMap = new Map<string, number>(); // skillName -> total months
 
@@ -952,12 +979,14 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
                     1
                 );
 
-                // 스킬별로 기간 누적
+                // 스킬별로 기간 누적 (선택한 기술만)
                 exp.skills.forEach((skill: any) => {
                   if (skill && skill.name) {
                     const skillName = skill.name;
-                    const current = skillMap.get(skillName) || 0;
-                    skillMap.set(skillName, current + months);
+                    if (selectedSkills.includes(skillName)) {
+                      const current = skillMap.get(skillName) || 0;
+                      skillMap.set(skillName, current + months);
+                    }
                   }
                 });
               });
@@ -983,19 +1012,22 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
                     1
                 );
 
-                // 스킬별로 기간 누적
+                // 스킬별로 기간 누적 (선택한 기술만)
                 project.skills.forEach((skill: any) => {
                   if (skill && skill.name) {
                     const skillName = skill.name;
-                    const current = skillMap.get(skillName) || 0;
-                    skillMap.set(skillName, current + months);
+                    if (selectedSkills.includes(skillName)) {
+                      const current = skillMap.get(skillName) || 0;
+                      skillMap.set(skillName, current + months);
+                    }
                   }
                 });
               });
 
-              // 상위 6개 추출 및 년/개월 정보 포함
-              return Array.from(skillMap.entries())
-                .map(([name, months]) => {
+              // 선택한 기술들의 기간 정보 반환
+              return selectedSkills
+                .map((skillName) => {
+                  const months = skillMap.get(skillName) || 0;
                   const years = Math.floor(months / 12);
                   const remainingMonths = months % 12;
                   let displayText = "";
@@ -1007,14 +1039,13 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
                     displayText = `${years}년 ${remainingMonths}개월`;
                   }
                   return {
-                    name,
+                    name: skillName,
                     months,
                     years: months / 12, // 차트용 (소수점)
                     displayText,
                   };
                 })
-                .sort((a, b) => b.months - a.months)
-                .slice(0, 6);
+                .sort((a, b) => b.months - a.months);
             };
 
             const topSkills = calculateSkillDurations();
@@ -1028,7 +1059,7 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
                   Skill Stack
                 </h2>
                 <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-4 sm:mb-6">
-                  사용 기간이 가장 긴 6개의 스킬만 표시됩니다
+                  선택한 기술들의 사용 기간을 표시합니다
                 </p>
                 <div className="w-full">
                   <SkillStackChart data={topSkills} />

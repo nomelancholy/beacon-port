@@ -65,6 +65,7 @@ export const resumesWithRLS = pgTable(
     x: text("x"),
     introduce: text("introduce"),
     englishLevel: englishLevelEnum("english_level"),
+    skillStackSelected: text("skill_stack_selected"), // JSON 배열로 저장
     created_at: timestamp("created_at").notNull().defaultNow(),
     updated_at: timestamp("updated_at").notNull().defaultNow(),
   },

@@ -324,6 +324,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
             | "Advanced"
             | "Intermediate"
             | "Basic") || null,
+        skill_stack_selected: (formData.get("skill_stack_selected") as string) || null,
         is_public: existingIsPublic, // 수정 모드면 기존 값, 신규면 false
       };
 
@@ -1132,16 +1133,27 @@ const SkillStackChart = React.memo(
 
     // 가장 긴 막대의 값을 찾아서 domain을 조정하여 우측 여백 생성
     const maxValue = Math.max(...chartData.map((d) => d.years));
-    // 모바일에서는 더 큰 여백을 위해 domain을 더 크게 설정
-    const domainMax = isMobile ? maxValue * 1.35 : maxValue * 1.18;
-    // 모바일에서는 margin도 더 크게 설정
-    const rightMargin = isMobile ? 24 : 16;
+    // 짧은 막대의 텍스트도 잘리지 않도록 충분한 여백 확보
+    // 최소값을 보장하여 짧은 경력도 텍스트가 잘리지 않도록 함
+    const minDomainForShortBars = 0.5; // 짧은 막대를 위한 최소 domain 값
+    const domainMax = Math.max(
+      minDomainForShortBars,
+      isMobile ? maxValue * 1.5 : maxValue * 1.3
+    );
+    // 텍스트가 잘리지 않도록 우측 여백을 충분히 확보
+    const rightMargin = isMobile ? 80 : 70;
 
-    // 스킬 개수에 따라 높이 동적 계산 (각 막대 20px, 최소 60px)
+    // 스킬 개수에 따라 높이 동적 계산
+    // 기술 이름이 잘리지 않도록 충분한 높이 확보
     const skillCount = chartData.length;
-    const barHeight = 20; // 각 막대 높이
-    const minHeight = 60; // 최소 높이
-    const calculatedHeight = Math.max(minHeight, skillCount * barHeight);
+    const barSize = 36; // 막대 높이 (기술 이름이 잘리지 않도록 충분히)
+    const barCategoryGap = 12; // 막대 사이 간격
+    const minHeight = 80; // 최소 높이
+    // 각 막대 높이 + 간격을 고려한 전체 높이 계산
+    const calculatedHeight = Math.max(
+      minHeight,
+      skillCount * (barSize + barCategoryGap) + barCategoryGap
+    );
 
     return (
       <div className="w-full" style={{ height: calculatedHeight }}>
@@ -1153,12 +1165,12 @@ const SkillStackChart = React.memo(
             accessibilityLayer
             data={chartData}
             layout="vertical"
-            barCategoryGap={2}
+            barCategoryGap={barCategoryGap}
             height={calculatedHeight}
             margin={{
               right: rightMargin,
-              top: 2,
-              bottom: 2,
+              top: 8,
+              bottom: 8,
             }}
           >
             <CartesianGrid horizontal={false} />
@@ -1175,7 +1187,7 @@ const SkillStackChart = React.memo(
               dataKey="years"
               fill="var(--color-years)"
               radius={4}
-              barSize={20}
+              barSize={barSize}
             >
               <LabelList
                 dataKey="skill"
@@ -2573,6 +2585,19 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
       formData["Introduce"] = resume.introduce;
       selectedFields["Introduce"] = true;
     }
+    const skillStackSelected = (resume as any).skill_stack_selected;
+    if (skillStackSelected) {
+      formData["skill_stack_selected"] = skillStackSelected;
+      // 선택한 기술이 있으면 Skill Stack 체크박스 활성화
+      try {
+        const selectedSkills = JSON.parse(skillStackSelected);
+        if (Array.isArray(selectedSkills) && selectedSkills.length > 0) {
+          selectedFields["Skill Stack"] = true;
+        }
+      } catch {
+        // JSON 파싱 실패 시 무시
+      }
+    }
 
     // Experiences
     if (loaderData.experiences && loaderData.experiences.length > 0) {
@@ -2686,6 +2711,7 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
   );
   const [isPreviewMode, setIsPreviewMode] = React.useState(false);
   const [showTitleDialog, setShowTitleDialog] = React.useState(false);
+  const [showSkillStackDialog, setShowSkillStackDialog] = React.useState(false);
   const [resumeTitle, setResumeTitle] = React.useState(initialData.resumeTitle);
   const [isUploadingPhoto, setIsUploadingPhoto] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
@@ -2809,6 +2835,25 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
   );
 
   const handleCheckboxChange = (field: string) => {
+    // Skill Stack의 경우 다이얼로그 열기
+    if (field === "Skill Stack") {
+      if (!selectedFields[field]) {
+        setShowSkillStackDialog(true);
+      } else {
+        // 체크 해제 시 선택한 기술도 제거
+        setSelectedFields((prev) => ({
+          ...prev,
+          [field]: false,
+        }));
+        setFormData((prev) => {
+          const newData = { ...prev };
+          delete newData["skill_stack_selected"];
+          return newData;
+        });
+      }
+      return;
+    }
+
     setSelectedFields((prev) => ({
       ...prev,
       [field]: !prev[field],
@@ -3444,7 +3489,15 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
         {/* Skill Stack 섹션 */}
         {selectedFields["Skill Stack"] &&
           (() => {
-            // 스킬 사용 기간 계산 함수
+            // 선택한 기술 목록 가져오기
+            const selectedSkillsStr = formData["skill_stack_selected"];
+            const selectedSkills: string[] = selectedSkillsStr
+              ? JSON.parse(selectedSkillsStr)
+              : [];
+
+            if (selectedSkills.length === 0) return null;
+
+            // 스킬 사용 기간 계산 함수 (선택한 기술만)
             const calculateSkillDurations = () => {
               const skillMap = new Map<string, number>(); // skillName -> total months
 
@@ -3468,11 +3521,11 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
                     1
                 );
 
-                // 스킬별로 기간 누적
+                // 스킬별로 기간 누적 (선택한 기술만)
                 skills
                   .split(",")
                   .map((s) => s.trim())
-                  .filter((s) => s.length > 0)
+                  .filter((s) => s.length > 0 && selectedSkills.includes(s))
                   .forEach((skillName) => {
                     const current = skillMap.get(skillName) || 0;
                     skillMap.set(skillName, current + months);
@@ -3499,20 +3552,21 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
                     1
                 );
 
-                // 스킬별로 기간 누적
+                // 스킬별로 기간 누적 (선택한 기술만)
                 skills
                   .split(",")
                   .map((s) => s.trim())
-                  .filter((s) => s.length > 0)
+                  .filter((s) => s.length > 0 && selectedSkills.includes(s))
                   .forEach((skillName) => {
                     const current = skillMap.get(skillName) || 0;
                     skillMap.set(skillName, current + months);
                   });
               });
 
-              // 상위 5개 추출 및 년/개월 정보 포함
-              return Array.from(skillMap.entries())
-                .map(([name, months]) => {
+              // 선택한 기술들의 기간 정보 반환
+              return selectedSkills
+                .map((skillName) => {
+                  const months = skillMap.get(skillName) || 0;
                   const years = Math.floor(months / 12);
                   const remainingMonths = months % 12;
                   let displayText = "";
@@ -3524,14 +3578,13 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
                     displayText = `${years}년 ${remainingMonths}개월`;
                   }
                   return {
-                    name,
+                    name: skillName,
                     months,
                     years: months / 12, // 차트용 (소수점)
                     displayText,
                   };
                 })
-                .sort((a, b) => b.months - a.months)
-                .slice(0, 6);
+                .sort((a, b) => b.months - a.months);
             };
 
             const topSkills = calculateSkillDurations();
@@ -3545,7 +3598,7 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
                   Skill Stack
                 </h2>
                 <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-4 sm:mb-6">
-                  사용 기간이 가장 긴 6개의 스킬만 표시됩니다
+                  선택한 기술들의 사용 기간을 표시합니다
                 </p>
                 <div className="w-full">
                   <SkillStackChart data={topSkills} />
@@ -4659,6 +4712,132 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
           </SidebarInset>
         </div>
       </SidebarProvider>
+
+      {/* Skill Stack 선택 다이얼로그 */}
+      <Dialog open={showSkillStackDialog} onOpenChange={setShowSkillStackDialog}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogClose onClose={() => setShowSkillStackDialog(false)} />
+          <DialogHeader>
+            <DialogTitle>Skill Stack 선택</DialogTitle>
+            <DialogDescription>
+              경력과 사이드프로젝트에서 사용한 기술 중 표시할 기술을 선택하세요. (최대 6개)
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            {(() => {
+              // 모든 기술 수집
+              const allSkillsSet = new Set<string>();
+
+              // Experience 스킬 수집
+              dynamicItems.Experience.forEach((itemId) => {
+                if (!selectedFields[itemId]) return;
+                const skills = formData[`${itemId}_스킬`];
+                if (skills) {
+                  skills
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter((s) => s.length > 0)
+                    .forEach((skill) => allSkillsSet.add(skill));
+                }
+              });
+
+              // Side Project 스킬 수집
+              dynamicItems["Side Project"].forEach((itemId) => {
+                if (!selectedFields[itemId]) return;
+                const skills = formData[`${itemId}_기술스택`];
+                if (skills) {
+                  skills
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter((s) => s.length > 0)
+                    .forEach((skill) => allSkillsSet.add(skill));
+                }
+              });
+
+              const allSkills = Array.from(allSkillsSet).sort();
+              const selectedSkillsStr = formData["skill_stack_selected"];
+              const selectedSkills: string[] = selectedSkillsStr
+                ? JSON.parse(selectedSkillsStr)
+                : [];
+
+              if (allSkills.length === 0) {
+                return (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
+                    경력이나 사이드프로젝트에 기술을 추가하면 여기에 표시됩니다.
+                  </p>
+                );
+              }
+
+              return (
+                <div className="space-y-2">
+                  {allSkills.map((skill) => {
+                    const isSelected = selectedSkills.includes(skill);
+                    const isMaxReached = selectedSkills.length >= 6 && !isSelected;
+
+                    return (
+                      <div
+                        key={skill}
+                        className="flex items-center space-x-2 p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
+                      >
+                        <Checkbox
+                          id={`skill-${skill}`}
+                          checked={isSelected}
+                          disabled={isMaxReached}
+                          onCheckedChange={(checked) => {
+                            const newSelected = checked
+                              ? [...selectedSkills, skill]
+                              : selectedSkills.filter((s) => s !== skill);
+                            
+                            // 최대 6개 제한
+                            const limitedSelected = newSelected.slice(0, 6);
+                            
+                            setFormData((prev) => ({
+                              ...prev,
+                              skill_stack_selected: JSON.stringify(limitedSelected),
+                            }));
+
+                            // Skill Stack 체크박스도 활성화
+                            if (limitedSelected.length > 0) {
+                              setSelectedFields((prev) => ({
+                                ...prev,
+                                "Skill Stack": true,
+                              }));
+                            }
+                          }}
+                        />
+                        <label
+                          htmlFor={`skill-${skill}`}
+                          className={`flex-1 cursor-pointer text-sm ${
+                            isMaxReached
+                              ? "text-gray-400 dark:text-gray-500"
+                              : "text-gray-900 dark:text-gray-100"
+                          }`}
+                        >
+                          {skill}
+                        </label>
+                        {isMaxReached && (
+                          <span className="text-xs text-gray-400">
+                            (최대 6개)
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+          <div className="flex gap-3 justify-end mt-6">
+            <Button
+              variant="outline"
+              onClick={() => setShowSkillStackDialog(false)}
+              className="cursor-pointer"
+            >
+              완료
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* 제목 입력 다이얼로그 */}
       <Dialog open={showTitleDialog} onOpenChange={setShowTitleDialog}>
