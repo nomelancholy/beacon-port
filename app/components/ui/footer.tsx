@@ -6,10 +6,10 @@ export function Footer() {
           <p className="text-sm text-gray-400">
             건의 사항 및 문의:{" "}
             <a
-              href="mailto:takeknowledge90@gmail.com"
+              href="mailto:takeknowledge@naver.com"
               className="text-white hover:text-gray-300 underline transition-colors"
             >
-              takeknowledge90@gmail.com
+              takeknowledge@naver.com
             </a>
           </p>
         </div>

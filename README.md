@@ -131,7 +131,7 @@ beacon-port/
 
 ## 문의
 
-건의 사항 및 문의: takeknowledge90@gmail.com
+건의 사항 및 문의: takeknowledge@naver.com
 
 ---
 
