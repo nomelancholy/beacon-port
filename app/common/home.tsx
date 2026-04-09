@@ -1,9 +1,6 @@
 import type { Route } from "./+types/home";
 import { Link } from "react-router";
-import { Globe } from "../components/ui/globe";
 import { TypingAnimation } from "../components/ui/typing-animation";
-import { InteractiveGridPattern } from "../components/ui/interactive-grid-pattern";
-import { cn } from "@/lib/utils";
 import {
   NavigationMenu,
   NavigationMenuItem,
@@ -84,23 +81,16 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           </p>
         </div>
 
-        {/* Globe Component */}
+        {/* Main Icon Image */}
         <div
           className="relative flex w-full max-w-4xl items-center justify-center overflow-hidden"
           style={{ minHeight: "clamp(400px, 60vh, 850px)" }}
         >
-          <InteractiveGridPattern
-            className={cn(
-              "z-0",
-              "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
-              "inset-x-0 inset-y-[-30%] h-[200%] skew-y-12"
-            )}
-            width={40}
-            height={40}
-            squares={[24, 24]}
-            squaresClassName="hover:fill-white/20"
+          <img
+            src="/main.png"
+            alt="Beacon Port main visual"
+            className="relative z-10 w-full max-w-[560px] rounded-2xl object-contain"
           />
-          <Globe className="relative z-10" />
         </div>
       </div>
 

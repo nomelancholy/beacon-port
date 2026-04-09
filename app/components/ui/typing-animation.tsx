@@ -1,24 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { motion, useInView } from "motion/react";
-import type { MotionProps } from "motion/react";
 
 import { cn } from "@/lib/utils";
 
-// 클라이언트에서만 motion.create 사용
-const createMotionComponent = (Component: React.ElementType) => {
-  if (typeof window === "undefined") {
-    return Component;
-  }
-  try {
-    return motion.create(Component, {
-      forwardMotionProps: true,
-    });
-  } catch {
-    return Component;
-  }
-};
-
-interface TypingAnimationProps extends MotionProps {
+interface TypingAnimationProps {
   children?: string;
   words?: string[];
   className?: string;
@@ -33,6 +17,7 @@ interface TypingAnimationProps extends MotionProps {
   showCursor?: boolean;
   blinkCursor?: boolean;
   cursorStyle?: "line" | "block" | "underscore";
+  [key: string]: unknown;
 }
 
 export function TypingAnimation({
@@ -52,21 +37,12 @@ export function TypingAnimation({
   cursorStyle = "line",
   ...props
 }: TypingAnimationProps) {
-  // 클라이언트에서만 motion.create 사용
-  const MotionComponent = useMemo(
-    () => createMotionComponent(Component),
-    [Component]
-  );
-
   const [displayedText, setDisplayedText] = useState<string>("");
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
   const [currentCharIndex, setCurrentCharIndex] = useState(0);
   const [phase, setPhase] = useState<"typing" | "pause" | "deleting">("typing");
   const elementRef = useRef<HTMLElement | null>(null);
-  const isInView = useInView(elementRef as React.RefObject<Element>, {
-    amount: 0.3,
-    once: true,
-  });
+  const [isInView, setIsInView] = useState(!startOnView);
 
   const wordsToAnimate = useMemo(
     () => words || (children ? [children] : []),
@@ -78,6 +54,29 @@ export function TypingAnimation({
   const deletingSpeed = deleteSpeed || typingSpeed / 2;
 
   const shouldStart = startOnView ? isInView : true;
+
+  useEffect(() => {
+    if (!startOnView || typeof window === "undefined") return;
+    const target = elementRef.current;
+    if (!target || !("IntersectionObserver" in window)) {
+      setIsInView(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (entry?.isIntersecting) {
+          setIsInView(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.3 }
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [startOnView]);
 
   useEffect(() => {
     if (!shouldStart || wordsToAnimate.length === 0) return;
@@ -146,12 +145,6 @@ export function TypingAnimation({
   const currentWordGraphemes = Array.from(
     wordsToAnimate[currentWordIndex] || ""
   );
-  const isComplete =
-    !loop &&
-    currentWordIndex === wordsToAnimate.length - 1 &&
-    currentCharIndex >= currentWordGraphemes.length &&
-    phase !== "deleting";
-
   // 커서를 항상 표시하도록 수정 (완료 후에도)
   const shouldShowCursor = showCursor;
 
@@ -168,8 +161,8 @@ export function TypingAnimation({
   };
 
   return (
-    <MotionComponent
-      ref={elementRef}
+    <Component
+      ref={elementRef as React.Ref<HTMLElement>}
       className={cn("leading-[5rem] tracking-[-0.02em]", className)}
       {...props}
     >
@@ -181,6 +174,6 @@ export function TypingAnimation({
           {getCursorChar()}
         </span>
       )}
-    </MotionComponent>
+    </Component>
   );
 }

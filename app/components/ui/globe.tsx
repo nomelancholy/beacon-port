@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import createGlobe from "cobe";
 import type { COBEOptions } from "cobe";
 import { useMotionValue, useSpring } from "motion/react";
@@ -43,10 +43,13 @@ export function Globe({
   config?: COBEOptions;
 }) {
   const phiRef = useRef(0);
-  const widthRef = useRef(0);
+  const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fallbackLayerARef = useRef<HTMLDivElement>(null);
+  const fallbackLayerBRef = useRef<HTMLDivElement>(null);
   const pointerInteracting = useRef<number | null>(null);
-  const pointerInteractionMovement = useRef(0);
+  const [canvasSize, setCanvasSize] = useState(0);
+  const [initFailed, setInitFailed] = useState(false);
 
   const r = useMotionValue(0);
   const rs = useSpring(r, {
@@ -65,58 +68,135 @@ export function Globe({
   const updateMovement = (clientX: number) => {
     if (pointerInteracting.current !== null) {
       const delta = clientX - pointerInteracting.current;
-      pointerInteractionMovement.current = delta;
       r.set(r.get() + delta / MOVEMENT_DAMPING);
     }
   };
 
   useEffect(() => {
-    if (typeof window === "undefined" || !canvasRef.current) return;
+    if (!containerRef.current || typeof window === "undefined") return;
 
-    const onResize = () => {
-      if (canvasRef.current) {
-        widthRef.current = canvasRef.current.offsetWidth;
-      }
+    const updateSize = () => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const nextSize = Math.floor(Math.min(rect.width, rect.height));
+      setCanvasSize(nextSize > 0 ? nextSize : 0);
     };
 
-    window.addEventListener("resize", onResize);
-    onResize();
+    updateSize();
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(containerRef.current);
 
-    const globe = createGlobe(canvasRef.current, {
-      ...config,
-      width: widthRef.current * 2,
-      height: widthRef.current * 2,
-      onRender: (state) => {
-        if (!pointerInteracting.current) phiRef.current += 0.005;
-        state.phi = phiRef.current + rs.get();
-        state.width = widthRef.current * 2;
-        state.height = widthRef.current * 2;
-      },
-    });
+    return () => observer.disconnect();
+  }, []);
 
-    setTimeout(() => {
-      if (canvasRef.current) {
-        canvasRef.current.style.opacity = "1";
+  useEffect(() => {
+    if (!initFailed || typeof window === "undefined") return;
+
+    let frameId = 0;
+    let angleA = 0;
+    let angleB = 0;
+
+    const tick = () => {
+      angleA = (angleA + 0.3) % 360;
+      angleB = (angleB - 0.45) % 360;
+
+      if (fallbackLayerARef.current) {
+        fallbackLayerARef.current.style.transform = `rotate(${angleA}deg)`;
       }
-    }, 0);
+      if (fallbackLayerBRef.current) {
+        fallbackLayerBRef.current.style.transform = `rotate(${angleB}deg)`;
+      }
+
+      frameId = window.requestAnimationFrame(tick);
+    };
+
+    frameId = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(frameId);
+  }, [initFailed]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !canvasRef.current || canvasSize <= 0) {
+      return;
+    }
+
+    let globe: ReturnType<typeof createGlobe> | null = null;
+    const pixelWidth = Math.max(canvasSize * 2, 2);
+    const pixelHeight = Math.max(canvasSize * 2, 2);
+
+    try {
+      globe = createGlobe(canvasRef.current, {
+        ...config,
+        devicePixelRatio: Math.min(window.devicePixelRatio || 1, 2),
+        mapSamples: Math.min(config.mapSamples ?? 16000, 8000),
+        width: pixelWidth,
+        height: pixelHeight,
+        onRender: (state) => {
+          if (pointerInteracting.current === null) phiRef.current += 0.005;
+          state.phi = phiRef.current + rs.get();
+          state.width = pixelWidth;
+          state.height = pixelHeight;
+        },
+      });
+      setInitFailed(false);
+      canvasRef.current.style.opacity = "1";
+    } catch (error) {
+      setInitFailed(true);
+      canvasRef.current.style.opacity = "0";
+      console.error("Failed to initialize globe:", error);
+    }
 
     return () => {
-      globe.destroy();
-      window.removeEventListener("resize", onResize);
+      globe?.destroy();
     };
-  }, [rs, config]);
+  }, [rs, config, canvasSize]);
 
   return (
     <div
+      ref={containerRef}
       className={cn(
-        "absolute inset-0 mx-auto aspect-[1/1] w-full max-w-[600px]",
+        "absolute inset-0 mx-auto aspect-square w-full max-w-[600px]",
         className
       )}
     >
+      {initFailed && (
+        <div className="absolute inset-0 z-0 flex items-center justify-center rounded-full bg-linear-to-br from-white/10 via-white/5 to-transparent">
+          <div className="relative size-2/3 rounded-full border border-white/20 bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.35),rgba(255,255,255,0.08)_42%,rgba(255,255,255,0)_72%)] shadow-[0_0_80px_rgba(255,255,255,0.08)]">
+            <div
+              ref={fallbackLayerARef}
+              className="absolute inset-[8%] rounded-full opacity-70"
+              style={{
+                background:
+                  "conic-gradient(from 0deg, rgba(255,255,255,0) 0deg, rgba(255,255,255,0.55) 65deg, rgba(255,255,255,0) 130deg, rgba(255,255,255,0) 360deg)",
+                maskImage:
+                  "radial-gradient(circle, transparent 58%, black 60%, black 69%, transparent 71%)",
+              }}
+            />
+            <div
+              ref={fallbackLayerBRef}
+              className="absolute inset-[16%] rounded-full opacity-60"
+              style={{
+                background:
+                  "conic-gradient(from 180deg, rgba(255,255,255,0) 0deg, rgba(255,255,255,0.35) 56deg, rgba(255,255,255,0) 120deg, rgba(255,255,255,0) 360deg)",
+                maskImage:
+                  "radial-gradient(circle, transparent 52%, black 54%, black 62%, transparent 64%)",
+              }}
+            />
+            <div
+              className="absolute left-1/2 top-[16%] size-2 -translate-x-1/2 rounded-full bg-white/80 blur-[1px]"
+              style={{
+                boxShadow:
+                  "0 0 18px rgba(255,255,255,0.7), 0 0 32px rgba(255,255,255,0.45)",
+              }}
+            />
+          </div>
+        </div>
+      )}
       <canvas
         className={cn(
-          "size-full opacity-0 transition-opacity duration-500 [contain:layout_paint_size]"
+          "size-full opacity-0 transition-opacity duration-500 contain-[layout_paint_size]"
         )}
+        width={Math.max(canvasSize * 2, 2)}
+        height={Math.max(canvasSize * 2, 2)}
         ref={canvasRef}
         onPointerDown={(e) => {
           pointerInteracting.current = e.clientX;
