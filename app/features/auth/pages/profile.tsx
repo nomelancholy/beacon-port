@@ -1,6 +1,6 @@
 import * as React from "react";
 import type { Route } from "./+types/profile";
-import { useNavigate, useFetcher } from "react-router";
+import { data as routeData, redirect, useNavigate, useFetcher } from "react-router";
 import { ArrowLeft, Save } from "lucide-react";
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
@@ -41,17 +41,18 @@ async function getProfile(supabase: SupabaseClient<Database>, userId: string) {
 }
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
-  const supabase = createSupabaseServerClient(request);
+  const headers = new Headers();
+  const supabase = createSupabaseServerClient(request, headers);
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) {
-    throw new Response("Unauthorized", { status: 401 });
+    throw redirect("/login", { headers });
   }
 
   const profile = await getProfile(supabase, user.id);
-  return { profile };
+  return routeData({ profile }, { headers });
 };
 
 export const action = async ({ request }: Route.ActionArgs) => {
@@ -63,7 +64,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
     } = await supabase.auth.getUser();
 
     if (!user) {
-      throw new Response("Unauthorized", { status: 401 });
+      throw redirect("/login", { headers });
     }
 
     const formData = await request.formData();

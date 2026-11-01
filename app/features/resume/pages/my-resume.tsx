@@ -12,7 +12,7 @@ import {
 } from "../../../components/ui/card";
 import { getResumes } from "../queries";
 import { createSupabaseServerClient } from "~/supabase/server";
-import { redirect } from "react-router";
+import { data as routeData, redirect } from "react-router";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -25,18 +25,18 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
-  const supabase = createSupabaseServerClient(request);
+  const headers = new Headers();
+  const supabase = createSupabaseServerClient(request, headers);
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) {
-    throw new Response("Unauthorized", { status: 401 });
+    throw redirect("/login", { headers });
   }
 
   const resumes = await getResumes(supabase, user.id);
-  console.log("resumes :>> ", resumes);
-  return { resumes };
+  return routeData({ resumes }, { headers });
 };
 
 export const action = async ({ request }: Route.ActionArgs) => {

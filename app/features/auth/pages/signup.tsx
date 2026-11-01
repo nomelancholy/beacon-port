@@ -1,6 +1,6 @@
 import * as React from "react";
 import type { Route } from "./+types/signup";
-import { Link, useFetcher, redirect } from "react-router";
+import { data as routeData, Link, useFetcher, redirect } from "react-router";
 import { createSupabaseServerClient } from "~/supabase/server";
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
@@ -47,17 +47,18 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
-  const supabase = createSupabaseServerClient(request);
+  const headers = new Headers();
+  const supabase = createSupabaseServerClient(request, headers);
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   // 로그인되어 있으면 나의 이력서 페이지로 리다이렉트
   if (user) {
-    return redirect("/my-resume");
+    return redirect("/my-resume", { headers });
   }
 
-  return {};
+  return routeData({}, { headers });
 };
 
 export const action = async ({ request }: Route.ActionArgs) => {

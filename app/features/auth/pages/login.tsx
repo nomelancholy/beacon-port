@@ -1,6 +1,6 @@
 import * as React from "react";
 import type { Route } from "./+types/login";
-import { Link, useFetcher, redirect } from "react-router";
+import { data as routeData, Link, useFetcher, redirect } from "react-router";
 import { z } from "zod";
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
@@ -32,17 +32,24 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
-  const supabase = createSupabaseServerClient(request);
+  const headers = new Headers();
+  const supabase = createSupabaseServerClient(request, headers);
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // 로그인되어 있으면 나의 이력서 페이지로 리다이렉트
-  if (user) {
-    return redirect("/my-resume");
+  const errorCode = new URL(request.url).searchParams.get("error");
+  const messages: Record<string, string> = {
+    oauth_cancelled: "소셜 로그인이 취소되었거나 거절되었습니다. 다시 시도해주세요.",
+    auth_failed: "로그인을 완료하지 못했습니다. 다시 시도해주세요.",
+    profile_unavailable: "회원 정보를 불러오지 못했습니다. 잠시 후 다시 로그인해주세요.",
+  };
+  const oauthError = errorCode ? messages[errorCode] : undefined;
+  if (user && !oauthError) {
+    return redirect("/my-resume", { headers });
   }
 
-  return {};
+  return routeData({ oauthError }, { headers });
 };
 
 export const action = async ({ request }: Route.ActionArgs) => {
@@ -122,7 +129,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
   return { success: false };
 };
 
-export default function Login() {
+export default function Login({ loaderData }: Route.ComponentProps) {
   const fetcher = useFetcher();
   const [errors, setErrors] = React.useState<{
     email?: string[];
@@ -175,6 +182,11 @@ export default function Login() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {loaderData.oauthError && (
+            <p role="alert" className="rounded-md bg-red-50 p-3 text-sm text-red-800 dark:bg-red-900/20 dark:text-red-200">
+              {loaderData.oauthError}
+            </p>
+          )}
           {/* Email Login Form */}
           <form onSubmit={handleEmailLogin} className="space-y-4">
             <div className="space-y-2">

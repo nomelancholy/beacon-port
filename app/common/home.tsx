@@ -1,5 +1,5 @@
 import type { Route } from "./+types/home";
-import { Link } from "react-router";
+import { data as routeData, Link } from "react-router";
 import { TypingAnimation } from "../components/ui/typing-animation";
 import {
   NavigationMenu,
@@ -21,12 +21,13 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
-  const supabase = createSupabaseServerClient(request);
+  const headers = new Headers();
+  const supabase = createSupabaseServerClient(request, headers);
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  return { isAuthenticated: !!user };
+  return routeData({ isAuthenticated: !!user }, { headers });
 };
 
 export default function Home({ loaderData }: Route.ComponentProps) {

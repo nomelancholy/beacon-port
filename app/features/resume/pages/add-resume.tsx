@@ -112,30 +112,24 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   const url = new URL(request.url);
   const resumeId = url.searchParams.get("resumeId");
 
-  if (!resumeId) {
-    return { resume: null };
-  }
-
-  const supabase = createSupabaseServerClient(request);
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Response("Unauthorized", { status: 401 });
-  }
+  const headers = new Headers();
+  const supabase = createSupabaseServerClient(request, headers);
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return redirect("/login", { headers });
+  if (!resumeId) return data({ resume: null }, { headers });
 
   try {
-    const data = await getResumeById(supabase, resumeId);
+    const result = await getResumeById(supabase, resumeId);
 
     // 소유자 확인
-    if (data.resume.user_id !== user.id) {
+    if (result.resume.user_id !== user.id) {
       throw new Response("Forbidden", { status: 403 });
     }
 
-    return data;
+    return data(result, { headers });
   } catch (error) {
-    console.error("Error loading resume:", error);
+    if (error instanceof Response) throw error;
+    console.error("Error loading resume");
     throw new Response("이력서를 불러올 수 없습니다", { status: 404 });
   }
 };

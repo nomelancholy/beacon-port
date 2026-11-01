@@ -1,6 +1,6 @@
 import * as React from "react";
 import type { Route } from "./+types/resume-detail";
-import { Link, useNavigate, useParams, useFetcher } from "react-router";
+import { data as routeData, Link, useNavigate, useParams, useFetcher } from "react-router";
 import {
   ArrowLeft,
   Github,
@@ -65,7 +65,9 @@ export const loader = async ({ params, request }: Route.LoaderArgs) => {
   if (!resumeId) {
     throw new Response("Resume ID is required", { status: 400 });
   }
-  const supabase = createSupabaseServerClient(request);
+  const headers = new Headers();
+  const supabase = createSupabaseServerClient(request, headers);
+  const { data: { user } } = await supabase.auth.getUser();
 
   // 먼저 이력서의 공개 상태 확인
   const { data: resumeInfo, error: resumeInfoError } = await supabase
@@ -80,14 +82,9 @@ export const loader = async ({ params, request }: Route.LoaderArgs) => {
 
   // 비공개 이력서인 경우
   if (!resumeInfo.is_public) {
-    // 사용자 인증 확인
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
     if (!user || resumeInfo.user_id !== user.id) {
       // 에러를 던지지 않고 특별한 플래그 반환
-      return {
+      return routeData({
         isPrivateResume: true,
         message:
           "이력서가 비공개 상태입니다. 이력서 주인에게 공개 전환을 요청하세요.",
@@ -98,26 +95,16 @@ export const loader = async ({ params, request }: Route.LoaderArgs) => {
         certifications: [],
         languageTests: [],
         etcs: [],
-      };
+      }, { headers });
     }
   }
 
   // 공개 이력서이거나 소유자인 경우 데이터 조회
   const data = await getResumeById(supabase, resumeId);
-  console.log("resume-detail loader data :>> ", data);
-
-  // 현재 사용자 정보 확인
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   // 이력서 소유자인지 확인
   const isOwner = user?.id === resumeInfo.user_id;
 
-  return {
-    ...data,
-    isOwner,
-  };
+  return routeData({ ...data, isOwner }, { headers });
 };
 
 export const action = async ({ params, request }: Route.ActionArgs) => {
