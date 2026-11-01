@@ -116,15 +116,15 @@ export const action = async ({ params, request }: Route.ActionArgs) => {
     } = await supabase.auth.getUser();
 
     if (!user) {
-      throw new Response("Unauthorized", { status: 401 });
+      throw new Response("Unauthorized", { status: 401, headers });
     }
 
     const resumeId = params.id;
     if (!resumeId) {
-      return {
+      return routeData({
         success: false,
         error: "이력서 ID가 필요합니다.",
-      };
+      }, { headers });
     }
 
     const formData = await request.formData();
@@ -141,17 +141,17 @@ export const action = async ({ params, request }: Route.ActionArgs) => {
         .single();
 
       if (resumeError || !resume) {
-        return {
+        return routeData({
           success: false,
           error: "이력서를 찾을 수 없습니다.",
-        };
+        }, { headers });
       }
 
       if (resume.user_id !== user.id) {
-        return {
+        return routeData({
           success: false,
           error: "이력서를 수정할 권한이 없습니다.",
-        };
+        }, { headers });
       }
 
       // 공개 상태 업데이트
@@ -162,16 +162,16 @@ export const action = async ({ params, request }: Route.ActionArgs) => {
 
       if (updateError) {
         console.error("Update public status error:", updateError);
-        return {
+        return routeData({
           success: false,
           error: "공개 상태 변경에 실패했습니다.",
-        };
+        }, { headers });
       }
 
-      return {
+      return routeData({
         success: true,
         isPublic,
-      };
+      }, { headers });
     }
 
     if (intent === "delete") {
@@ -183,17 +183,17 @@ export const action = async ({ params, request }: Route.ActionArgs) => {
         .single();
 
       if (resumeError || !resume) {
-        return {
+        return routeData({
           success: false,
           error: "이력서를 찾을 수 없습니다.",
-        };
+        }, { headers });
       }
 
       if (resume.user_id !== user.id) {
-        return {
+        return routeData({
           success: false,
           error: "이력서를 삭제할 권한이 없습니다.",
-        };
+        }, { headers });
       }
 
       // 이력서 삭제 (CASCADE로 관련 데이터도 자동 삭제됨)
@@ -204,16 +204,16 @@ export const action = async ({ params, request }: Route.ActionArgs) => {
 
       if (deleteError) {
         console.error("Delete resume error:", deleteError);
-        return {
+        return routeData({
           success: false,
           error: "이력서 삭제에 실패했습니다.",
-        };
+        }, { headers });
       }
 
-      return {
+      return routeData({
         success: true,
         deleted: true,
-      };
+      }, { headers });
     }
   }
 

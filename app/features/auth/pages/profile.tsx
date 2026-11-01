@@ -80,10 +80,10 @@ export const action = async ({ request }: Route.ActionArgs) => {
         .single();
 
       if (error) {
-        return { success: false, error: error.message };
+        return routeData({ success: false, error: error.message }, { headers });
       }
 
-      return { success: true, profile: data };
+      return routeData({ success: true, profile: data }, { headers });
     }
   }
   return { success: false };

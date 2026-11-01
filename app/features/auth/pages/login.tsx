@@ -44,7 +44,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     auth_failed: "로그인을 완료하지 못했습니다. 다시 시도해주세요.",
     profile_unavailable: "회원 정보를 불러오지 못했습니다. 잠시 후 다시 로그인해주세요.",
   };
-  const oauthError = errorCode ? messages[errorCode] : undefined;
+  const oauthError = errorCode && Object.hasOwn(messages, errorCode) ? messages[errorCode] : undefined;
   if (user && !oauthError) {
     return redirect("/my-resume", { headers });
   }
