@@ -12,14 +12,29 @@ try {
     $$ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
     GRANT USAGE ON SCHEMA public, auth TO authenticated, anon;
     GRANT EXECUTE ON FUNCTION auth.uid() TO authenticated, anon;`);
-  // Follow the journal, excluding the untracked supplemental ALTER TABLE files.
-  for (const file of ['0000_mysterious_nuke', '0001_curious_archangel', '0002_ancient_moira_mactaggert',
-    '0003_spotty_taskmaster', '0004_tiny_mystique', '0005_quick_whizzer', '0006_big_jubilee',
-    '0007_grey_mesmero', '0008_futuristic_namora', '0009_mysterious_trauma', '0010_broad_eternals', '0011_familiar_baron_zemo', '0012_square_wraith']) {
-    await sql(`app/sql/migrations/${file}.sql`);
-  }
-  await sql('supabase/save_resume.sql');
-  await sql('app/sql/triggers/user_to_profile_trigger.sql');
+  // Supabase-owned schemas are stubbed locally; app schema, grants and policies
+  // come exclusively from the exact bootstrap SQL delivered to the user.
+  await db.exec(`CREATE SCHEMA storage;
+    CREATE TABLE storage.buckets(id text PRIMARY KEY, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
+    CREATE TABLE storage.objects(id uuid PRIMARY KEY DEFAULT gen_random_uuid(), bucket_id text, name text);
+    ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+    CREATE FUNCTION storage.foldername(text) RETURNS text[] LANGUAGE sql IMMUTABLE AS
+    $$ SELECT (string_to_array($1, '/'))[1:greatest(array_length(string_to_array($1, '/'), 1)-1, 0)] $$;
+    GRANT USAGE ON SCHEMA storage TO anon, authenticated;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON storage.objects TO authenticated;`);
+  const bootstrap = await readFile(new URL('supabase/bootstrap.sql', root), 'utf8');
+  assert.ok(bootstrap.includes(await readFile(new URL('supabase/save_resume.sql', root), 'utf8')));
+  assert.ok(bootstrap.includes(await readFile(new URL('app/sql/triggers/user_to_profile_trigger.sql', root), 'utf8')));
+  const existing = '33333333-3333-4333-8333-333333333333';
+  await db.query(`INSERT INTO auth.users(id,email,raw_user_meta_data,raw_app_meta_data)
+    VALUES ($1,'existing@example.test','{"full_name":"Existing Google User"}','{"provider":"google"}')`, [existing]);
+  await sql('supabase/bootstrap.sql');
+  assert.equal((await db.query('SELECT nickname FROM public.profiles WHERE id=$1', [existing])).rows[0].nickname, 'Existing Google User');
+  await db.query("UPDATE public.profiles SET nickname='Custom name' WHERE id=$1", [existing]);
+  await sql('supabase/bootstrap.sql');
+  assert.equal((await db.query('SELECT nickname FROM public.profiles WHERE id=$1', [existing])).rows[0].nickname, 'Custom name');
+  await db.query('DELETE FROM auth.users WHERE id=$1', [existing]);
+  console.log('PASS fresh bootstrap and repeat execution');
   const owner = '11111111-1111-4111-8111-111111111111';
   const other = '22222222-2222-4222-8222-222222222222';
   await db.exec(`INSERT INTO auth.users(id, email, raw_user_meta_data, raw_app_meta_data) VALUES
@@ -27,13 +42,16 @@ try {
       ('${other}','other@example.test','{"user_name":"GitHub User"}','{"provider":"github"}');
     INSERT INTO public.profiles(id,email,nickname,provider) VALUES
       ('${owner}','owner@example.test','owner','email'), ('${other}','other@example.test','other','email') ON CONFLICT (id) DO NOTHING;
-    GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authenticated;
-    SET ROLE authenticated;`);
-  await db.query(`SELECT set_config('request.jwt.claim.sub', $1, false)`, [owner]);
+`);
   const profiles = (await db.query('SELECT nickname, provider FROM public.profiles ORDER BY id')).rows;
   assert.deepEqual(profiles.map(p => p.provider), ['google', 'github']);
   assert.deepEqual(profiles.map(p => p.nickname), ['Google User', 'GitHub User']);
   console.log('PASS Google and GitHub signups automatically create profiles');
+  await db.exec('SET ROLE authenticated');
+  await db.query(`SELECT set_config('request.jwt.claim.sub', $1, false)`, [owner]);
+  assert.equal((await db.query('SELECT id FROM public.profiles')).rows.length, 1);
+  await assert.rejects(db.query("UPDATE public.profiles SET email = 'other@example.test' WHERE id = $1", [owner]));
+  console.log('PASS profile privacy and protected email column');
   const payload = {
     resume: { title: 'Original', name: 'Owner' },
     experiences: [{ company: 'Company', start_date: '2025-01', skills: ['react', 'typescript'] }],
@@ -47,7 +65,18 @@ try {
   assert.equal((await db.query('SELECT count(*)::int AS n FROM public.language_tests')).rows[0].n, 1);
   console.log('PASS create all six categories and skill mappings');
 
+  await db.exec("RESET ROLE; SET ROLE anon; SELECT set_config('request.jwt.claim.sub', '', false)");
+  assert.equal((await db.query('SELECT id FROM public.resumes')).rows.length, 0);
+  assert.equal((await db.query('SELECT id FROM public.experiences')).rows.length, 0);
+  await db.exec('RESET ROLE; SET ROLE authenticated');
+  await db.query("SELECT set_config('request.jwt.claim.sub', $1, false)", [owner]);
   await db.query('UPDATE public.resumes SET is_public = true WHERE id = $1', [id]);
+  await db.exec("RESET ROLE; SET ROLE anon; SELECT set_config('request.jwt.claim.sub', '', false)");
+  assert.equal((await db.query('SELECT id FROM public.resumes')).rows.length, 1);
+  assert.equal((await db.query('SELECT id FROM public.experiences')).rows.length, 1);
+  await db.exec('RESET ROLE; SET ROLE authenticated');
+  await db.query("SELECT set_config('request.jwt.claim.sub', $1, false)", [owner]);
+  console.log('PASS private details stay hidden and public details are readable');
   const snapshot = async () => JSON.stringify((await db.query(`SELECT
     (SELECT jsonb_agg(to_jsonb(r)) FROM public.resumes r) AS resumes,
     (SELECT jsonb_agg(to_jsonb(e)) FROM public.experiences e) AS experiences,
@@ -82,6 +111,14 @@ try {
   assert.deepEqual(rows.map(r => r.company), ['Second', 'First']);
   assert.equal((await db.query('SELECT is_public FROM public.resumes WHERE id = $1', [id])).rows[0].is_public, true);
   console.log('PASS update preserves public status and submitted order');
+
+  await db.query('INSERT INTO storage.objects(bucket_id,name) VALUES ($1,$2)', ['photos', `${owner}/profile.png`]);
+  await assert.rejects(db.query('INSERT INTO storage.objects(bucket_id,name) VALUES ($1,$2)', ['photos', `${other}/profile.png`]));
+  await db.query(`SELECT set_config('request.jwt.claim.sub', $1, false)`, [other]);
+  assert.equal((await db.query('DELETE FROM storage.objects RETURNING id')).rows.length, 0);
+  await db.query(`SELECT set_config('request.jwt.claim.sub', $1, false)`, [owner]);
+  assert.equal((await db.query('DELETE FROM storage.objects RETURNING id')).rows.length, 1);
+  console.log('PASS photo upload and deletion are limited to the owner folder');
 
   await db.exec('RESET ROLE; SET ROLE anon;');
   await assert.rejects(save(id, payload));

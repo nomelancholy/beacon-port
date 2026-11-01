@@ -131,6 +131,13 @@ beacon-port/
 
 ## 저장 안정성 및 새 Supabase 연결
 
+새 프로젝트를 SQL Editor로 구성하려면 [`supabase/bootstrap.sql`](./supabase/bootstrap.sql)의
+전체 내용을 한 번 실행하면 됩니다. 테이블, 인덱스, RLS, 권한, 소셜 프로필 생성·보완,
+사진 버킷과 업로드·삭제 정책, 트랜잭션 저장 함수를 포함합니다.
+재실행해도 기존 이력서와 프로필을 삭제하지 않습니다. 사진 버킷은 앱의 공개 URL 방식에 맞춰 공개로 생성됩니다.
+Google·GitHub 제공자와 Auth URL 설정은 Supabase 대시보드에서 별도로 설정합니다.
+저장 함수나 프로필 트리거를 수정할 때는 bootstrap.sql에 포함된 동일 SQL도 함께 갱신합니다.
+
 이력서 저장은 전체 폼 검증 후 `public.save_resume` RPC를 한 번 호출합니다.
 기본 정보, 상세 항목 6종, 스킬 연결은 하나의 트랜잭션으로 저장되며,
 어느 단계에서든 실패하면 기존 데이터가 유지됩니다. 기존의 개별 테이블 저장 방식으로
@@ -162,7 +169,7 @@ npm install --prefix /tmp/beacon-port-db-tests --no-save @electric-sql/pglite@0.
 PGLITE_MODULE=/tmp/beacon-port-db-tests/node_modules/@electric-sql/pglite/dist/index.js npm run test:db
 ```
 
-DB 테스트는 마이그레이션 저널 순서로 스키마·RLS와 저장 함수를 구성해 생성·수정,
+DB 테스트는 빈 DB에서 bootstrap.sql 전체를 실행해 스키마·RLS와 저장 함수를 구성하고 생성·수정,
 저장 후반부 오류의 전체 롤백, 다른 사용자와 익명 사용자의 접근 차단을 확인합니다.
 실제 Supabase의 Auth·Storage 연결 검증은 별도로 필요합니다.
 
