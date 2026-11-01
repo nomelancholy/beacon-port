@@ -179,6 +179,27 @@ Vercel에는 서버용 `SUPABASE_URL`, `SUPABASE_ANON_KEY`와 브라우저용
 Supabase Auth의 Site URL은 운영 주소로, 허용 Redirect URL은 운영 주소의
 `/auth/callback` 및 사용하는 로컬·미리보기 콜백 주소로 설정해야 합니다.
 
+## 소셜 로그인 설정
+
+로그인과 회원가입 화면은 Google·GitHub OAuth를 지원합니다.
+테이블 생성 후 `app/sql/triggers/user_to_profile_trigger.sql`을 적용하면
+이메일·Google·GitHub 신규 가입자의 프로필을 생성하고 기존 누락 프로필도 보완합니다.
+
+GitHub 설정:
+
+1. https://github.com/settings/developers → OAuth Apps → New OAuth App
+2. Application name: `Beacon Port`
+3. Homepage URL: `https://beacon-port.vercel.app`
+4. Authorization callback URL: `https://wujwypdjjryisbcsxhsb.supabase.co/auth/v1/callback`
+5. Register application 후 Client ID와 Generate a new client secret으로 생성한 값을
+   Supabase → Authentication → Sign In / Providers → GitHub에 입력하고 활성화·저장
+
+Supabase → Authentication → URL Configuration에는 Site URL로
+`https://beacon-port.vercel.app`을 설정하고, Redirect URLs에
+`https://beacon-port.vercel.app/auth/callback` 및 사용하는 미리보기 주소의
+`/auth/callback`, `http://localhost:5173/auth/callback`을 추가합니다.
+GitHub Client secret은 Supabase 제공자 설정에만 저장합니다.
+
 ## 문의
 
 건의 사항 및 문의: takeknowledge@naver.com

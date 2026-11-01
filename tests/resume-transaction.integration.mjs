@@ -7,7 +7,7 @@ const root = new URL('../', import.meta.url);
 const sql = async path => db.exec(await readFile(new URL(path, root), 'utf8'));
 try {
   await db.exec(`CREATE ROLE authenticated; CREATE ROLE anon; CREATE SCHEMA auth;
-    CREATE TABLE auth.users(id uuid PRIMARY KEY);
+    CREATE TABLE auth.users(id uuid PRIMARY KEY, email text, raw_user_meta_data jsonb, raw_app_meta_data jsonb);
     CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS
     $$ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
     GRANT USAGE ON SCHEMA public, auth TO authenticated, anon;
@@ -19,14 +19,21 @@ try {
     await sql(`app/sql/migrations/${file}.sql`);
   }
   await sql('supabase/save_resume.sql');
+  await sql('app/sql/triggers/user_to_profile_trigger.sql');
   const owner = '11111111-1111-4111-8111-111111111111';
   const other = '22222222-2222-4222-8222-222222222222';
-  await db.exec(`INSERT INTO auth.users VALUES ('${owner}'), ('${other}');
+  await db.exec(`INSERT INTO auth.users(id, email, raw_user_meta_data, raw_app_meta_data) VALUES
+      ('${owner}','owner@example.test','{"full_name":"Google User"}','{"provider":"google"}'),
+      ('${other}','other@example.test','{"user_name":"GitHub User"}','{"provider":"github"}');
     INSERT INTO public.profiles(id,email,nickname,provider) VALUES
-      ('${owner}','owner@example.test','owner','email'), ('${other}','other@example.test','other','email');
+      ('${owner}','owner@example.test','owner','email'), ('${other}','other@example.test','other','email') ON CONFLICT (id) DO NOTHING;
     GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authenticated;
     SET ROLE authenticated;`);
   await db.query(`SELECT set_config('request.jwt.claim.sub', $1, false)`, [owner]);
+  const profiles = (await db.query('SELECT nickname, provider FROM public.profiles ORDER BY id')).rows;
+  assert.deepEqual(profiles.map(p => p.provider), ['google', 'github']);
+  assert.deepEqual(profiles.map(p => p.nickname), ['Google User', 'GitHub User']);
+  console.log('PASS Google and GitHub signups automatically create profiles');
   const payload = {
     resume: { title: 'Original', name: 'Owner' },
     experiences: [{ company: 'Company', start_date: '2025-01', skills: ['react', 'typescript'] }],
