@@ -83,6 +83,13 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           </p>
         </div>
 
+        {!isAuthenticated && (
+          <div className="relative z-10 mt-4 w-full max-w-xs space-y-3 pb-4">
+            <p className="text-center text-sm text-gray-300">소셜 계정으로 간편하게 시작하세요</p>
+            <SocialLoginButtons mode="login" action="/login" />
+          </div>
+        )}
+
         {/* Main Icon Image */}
         <div
           className="relative flex w-full max-w-4xl items-center justify-center overflow-hidden"
@@ -94,13 +101,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             className="relative z-10 w-full max-w-[560px] rounded-2xl object-contain"
           />
         </div>
-
-        {!isAuthenticated && (
-          <div className="relative z-10 mt-4 w-full max-w-xs space-y-3 pb-4">
-            <p className="text-center text-sm text-gray-300">소셜 계정으로 간편하게 시작하세요</p>
-            <SocialLoginButtons mode="login" action="/login" />
-          </div>
-        )}
       </div>
 
       {/* Typing Animation - Bottom */}
