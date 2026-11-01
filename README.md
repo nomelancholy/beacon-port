@@ -129,6 +129,56 @@ beacon-port/
 - 컴포넌트는 함수형 컴포넌트 사용
 - React Hooks 활용
 
+## 저장 안정성 및 새 Supabase 연결
+
+이력서 저장은 전체 폼 검증 후 `public.save_resume` RPC를 한 번 호출합니다.
+기본 정보, 상세 항목 6종, 스킬 연결은 하나의 트랜잭션으로 저장되며,
+어느 단계에서든 실패하면 기존 데이터가 유지됩니다. 기존의 개별 테이블 저장 방식으로
+되돌아가는 우회 처리는 없습니다.
+
+새 Supabase에 기존 테이블과 RLS 정책을 구성한 다음,
+SQL Editor에서 [`supabase/save_resume.sql`](./supabase/save_resume.sql)을 실행하세요.
+이 SQL은 기존 스키마에 저장 함수를 추가하며, 빈 데이터베이스의 전체 초기화 스크립트는 아닙니다.
+함수를 적용한 뒤 `npm run db:typegen`으로 RPC 타입을 재생성할 수 있습니다.
+함수가 없는 환경에서는 저장 실패를 표시하고 기존 데이터를 변경하지 않습니다.
+
+사진 업로드에는 `photos` 버킷과 사용자 본인 경로에 대한 Storage 정책이 필요합니다.
+DB 저장이 명확하게 실패하면 이번 요청에서 올린 사진만 정리합니다.
+응답 유실로 DB 커밋 여부를 알 수 없는 경우에는 저장된 사진을 지우지 않도록 유지합니다.
+
+검증 명령:
+
+```sh
+npm test
+npm run build
+npm run typecheck
+```
+
+DB 트랜잭션 테스트는 실제 Supabase 계정 없이 PGlite의 로컬 PostgreSQL 엔진에서 실행할 수 있습니다.
+테스트용 의존성은 별도 임시 폴더에 설치합니다.
+
+```sh
+npm install --prefix /tmp/beacon-port-db-tests --no-save @electric-sql/pglite@0.3.16
+PGLITE_MODULE=/tmp/beacon-port-db-tests/node_modules/@electric-sql/pglite/dist/index.js npm run test:db
+```
+
+DB 테스트는 마이그레이션 저널 순서로 스키마·RLS와 저장 함수를 구성해 생성·수정,
+저장 후반부 오류의 전체 롤백, 다른 사용자와 익명 사용자의 접근 차단을 확인합니다.
+실제 Supabase의 Auth·Storage 연결 검증은 별도로 필요합니다.
+
+## Vercel 운영
+
+운영 주소는 `https://beacon-port.vercel.app`을 사용합니다.
+공유 메타데이터는 접속한 주소를 사용하므로 기존 유료 도메인에 의존하지 않습니다.
+GitHub 저장소는 `nomelancholy/beacon-port`이며, 운영 브랜치는 `master`입니다.
+다른 브랜치는 Vercel 미리보기 환경에서 확인한 뒤 운영에 반영합니다.
+
+Vercel에는 서버용 `SUPABASE_URL`, `SUPABASE_ANON_KEY`와 브라우저용
+`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`를 설정합니다.
+새 Supabase의 테이블·저장 함수·Storage 구성을 완료한 뒤 운영 환경변수를 전환합니다.
+Supabase Auth의 Site URL은 운영 주소로, 허용 Redirect URL은 운영 주소의
+`/auth/callback` 및 사용하는 로컬·미리보기 콜백 주소로 설정해야 합니다.
+
 ## 문의
 
 건의 사항 및 문의: takeknowledge@naver.com

@@ -461,7 +461,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      save_resume: {
+        Args: { p_resume_id: string | null; p_payload: Json }
+        Returns: string
+      }
     }
     Enums: {
       english_level: "Native" | "Advanced" | "Intermediate" | "Basic"

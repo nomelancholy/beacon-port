@@ -31,9 +31,13 @@ export const links: Route.LinksFunction = () => [
   },
 ];
 
-export const meta: Route.MetaFunction = () => {
-  // Open Graph 태그용 프로덕션 URL (카카오톡 공유 시 사용)
-  const siteUrl = "https://www.beaconport.online";
+export const loader = ({ request }: Route.LoaderArgs) => ({
+  siteUrl: new URL(request.url).origin,
+});
+
+export const meta: Route.MetaFunction = ({ data }) => {
+  const siteUrl = data?.siteUrl;
+  if (!siteUrl) return [{ title: "Beacon Port - 인재의 신호가 모이는 곳" }];
   const imageUrl = `${siteUrl}/icon.png`;
 
   return [

@@ -12,6 +12,9 @@ export function Footer() {
               takeknowledge@naver.com
             </a>
           </p>
+          <p className="text-sm text-gray-500">
+            Copyright© 코디드바이 All rights reserved.
+          </p>
         </div>
       </div>
     </footer>
