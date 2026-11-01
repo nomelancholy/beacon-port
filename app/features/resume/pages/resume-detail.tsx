@@ -433,7 +433,7 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
   // 비공개 이력서인 경우 에러 메시지 표시
   if ("isPrivateResume" in loaderData && loaderData.isPrivateResume) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4">
+      <div className="min-h-page bg-gray-900 flex items-center justify-center px-4">
         <div className="max-w-md w-full bg-gray-800 rounded-lg shadow-xl p-8 text-center">
           <div className="flex justify-center mb-4">
             <AlertCircle className="h-16 w-16 text-red-500" />
@@ -585,7 +585,7 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
 
   if (!resume) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+      <div className="min-h-page bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <p className="text-white text-xl mb-4">이력서를 찾을 수 없습니다</p>
           <Button onClick={() => navigate("/my-resume")}>
@@ -687,7 +687,7 @@ export default function ResumeDetail({ loaderData }: Route.ComponentProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900">
+    <div className="min-h-page bg-gray-900">
       {/* Header */}
       <div className="border-b border-gray-700 bg-gray-900 no-print">
         <div className="container mx-auto px-4 py-4 sm:py-6">

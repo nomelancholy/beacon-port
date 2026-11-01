@@ -6,7 +6,18 @@
     "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
 }
 
+@utility min-h-page {
+  min-height: calc(100dvh - var(--footer-height));
+}
+
+@utility h-page {
+  height: calc(100dvh - var(--footer-height));
+}
+
 :root {
+  /* Footer height, reserved so a page and the footer fit in one screen */
+  --footer-height: 3.25rem;
+
   /* shadcn/ui color variables */
   --background: 0 0% 100%;
   --foreground: 0 0% 3.9%;
@@ -38,6 +49,12 @@
   --sidebar-accent-foreground: 240 5.9% 10%;
   --sidebar-border: 220 13% 91%;
   --sidebar-ring: 217.2 91.2% 59.8%;
+}
+
+@media (min-width: 48rem) {
+  :root {
+    --footer-height: 2.5rem;
+  }
 }
 
 @media (prefers-color-scheme: dark) {

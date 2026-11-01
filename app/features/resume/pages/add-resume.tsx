@@ -3329,9 +3329,9 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
       collisionDetection={closestCenter}
       onDragEnd={handleDragEnd}
     >
-      <SidebarProvider defaultOpen={false}>
+      <SidebarProvider defaultOpen={false} className="min-h-0">
         <div
-          className={`flex h-screen w-full overflow-hidden ${isSaving ? "pointer-events-none" : ""}`}
+          className={`flex h-page w-full overflow-hidden ${isSaving ? "pointer-events-none" : ""}`}
         >
           <Sidebar className="border-r border-sidebar-border bg-white">
             <SidebarContent>
@@ -3535,7 +3535,7 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
             </SidebarContent>
           </Sidebar>
 
-          <SidebarInset className="flex-1 border-l border-sidebar-border bg-white flex flex-col overflow-hidden">
+          <SidebarInset className="min-h-0 flex-1 border-l border-sidebar-border bg-white flex flex-col overflow-hidden">
             <div className="flex h-16 shrink-0 items-center justify-between gap-2 border-b px-4">
               <div className="flex items-center gap-2">
                 <SidebarTrigger />

@@ -99,7 +99,7 @@ export default function App() {
       <div
         className={cn(
           isLoading && "pointer-events-none opacity-50",
-          "transition-opacity duration-300 flex flex-col min-h-screen"
+          "transition-opacity duration-300 flex flex-col min-h-dvh"
         )}
       >
         <div className="flex-1">

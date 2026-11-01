@@ -111,7 +111,7 @@ export default function Profile({ loaderData }: Route.ComponentProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900">
+    <div className="min-h-page bg-gray-900">
       {/* Toast Notification */}
       {toast && (
         <Toast message={toast.message} type={toast.type} onClose={hideToast} />

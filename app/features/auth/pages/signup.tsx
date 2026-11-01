@@ -212,7 +212,7 @@ export default function Signup() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-900 px-4 py-12">
+    <div className="flex min-h-page items-center justify-center bg-gray-900 px-4 py-12">
       <Card className="w-full max-w-md bg-white dark:bg-gray-800">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold text-gray-900 dark:text-white">

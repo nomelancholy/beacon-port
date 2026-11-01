@@ -83,7 +83,7 @@ export default function MyResume({ loaderData }: Route.ComponentProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900">
+    <div className="min-h-page bg-gray-900">
       {/* Header */}
       <div className="border-b border-gray-700 bg-gray-900">
         <div className="container mx-auto px-4 py-4 sm:py-6">

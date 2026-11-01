@@ -34,7 +34,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
 export default function Home({ loaderData }: Route.ComponentProps) {
   const { isAuthenticated } = loaderData;
   return (
-    <div className="w-full">
+    <div className="flex min-h-page w-full flex-col bg-gray-900">
       {/* Navigation Menu */}
       <nav className="fixed top-0 right-0 z-50 p-4">
         <NavigationMenu>
@@ -72,7 +72,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       </nav>
 
       {/* Content Section - Below Image */}
-      <div className="flex min-h-screen flex-col items-center justify-center bg-gray-900 px-4 py-4 md:py-8 lg:py-10">
+      <div className="flex flex-1 flex-col items-center bg-gray-900 px-4 pt-14 pb-2 md:pb-4">
         {/* Text Section */}
         <div className="mb-2 md:mb-4 text-center px-2">
           <h1 className="mb-2 md:mb-4 text-2xl font-bold text-white sm:text-3xl md:text-5xl lg:text-6xl whitespace-nowrap">
@@ -91,22 +91,19 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         )}
 
         {/* Main Icon Image */}
-        <div
-          className="relative flex w-full max-w-4xl items-center justify-center overflow-hidden"
-          style={{ minHeight: "clamp(400px, 60vh, 850px)" }}
-        >
+        <div className="relative min-h-44 w-full max-w-[560px] flex-1">
           <img
             src="/main.png"
             alt="Beacon Port main visual"
-            className="relative z-10 w-full max-w-[560px] rounded-2xl object-contain"
+            className="absolute inset-0 z-10 h-full w-full object-contain"
           />
         </div>
       </div>
 
       {/* Typing Animation - Bottom */}
-      <div className="relative z-20 flex items-center justify-center bg-gray-900 pb-8 md:pb-12 lg:pb-16">
+      <div className="relative z-20 flex items-center justify-center bg-gray-900 pb-3 md:pb-4">
         <TypingAnimation
-          className="text-4xl font-bold text-white md:text-5xl lg:text-6xl"
+          className="text-3xl font-bold text-white md:text-4xl"
           loop={false}
           blinkCursor={true}
           showCursor={true}
