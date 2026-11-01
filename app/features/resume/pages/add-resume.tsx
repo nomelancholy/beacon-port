@@ -1,14 +1,28 @@
 import * as React from "react";
 import type { Route } from "./+types/add-resume";
-import { useNavigate, useFetcher } from "react-router";
+import { useBlocker, useNavigate, useFetcher } from "react-router";
 import { createSupabaseServerClient } from "~/supabase/server";
 import { data, redirect } from "react-router";
+import { cn } from "~/lib/utils";
 import { getResumeById } from "../queries";
-import { parseResumeForm } from "../save-resume";
+import {
+  aboutMeFields,
+  detailCategories,
+  parseResumeForm,
+  toResumeFormData,
+  validateResumeDraft,
+  visibleResumeItems,
+} from "../save-resume";
 import { saveResume } from "../save-resume.server";
 import {
   ChevronDown,
+  Eye,
   Github,
+  ImagePlus,
+  ListChecks,
+  Pencil,
+  Trash2,
+  User,
   Youtube,
   Linkedin,
   Instagram,
@@ -30,23 +44,11 @@ import {
 import {
   useSortable,
   SortableContext,
+  sortableKeyboardCoordinates,
   verticalListSortingStrategy,
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
-  SidebarProvider,
-  SidebarTrigger,
-  SidebarInset,
-} from "../../../components/ui/sidebar";
 import { Checkbox } from "../../../components/ui/checkbox";
 import {
   Collapsible,
@@ -56,19 +58,11 @@ import {
 import { Input } from "../../../components/ui/input";
 import { Button } from "../../../components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "../../../components/ui/card";
-import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogClose,
 } from "../../../components/ui/dialog";
 import { Badge } from "../../../components/ui/badge";
 import { createBrowserClient } from "@supabase/ssr";
@@ -116,7 +110,9 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   const supabase = createSupabaseServerClient(request, headers);
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return redirect("/login", { headers });
-  if (!resumeId) return data({ resume: null }, { headers });
+  if (!resumeId) {
+    return data({ resume: null, defaultEmail: user.email ?? "" }, { headers });
+  }
 
   try {
     const result = await getResumeById(supabase, resumeId);
@@ -194,23 +190,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
 
 // 카테고리와 하위 항목 정의
 const resumeCategories = {
-  "About Me": [
-    "사진",
-    "이름",
-    "Role",
-    "이메일",
-    "전화번호",
-    "주소",
-    "영어 구사 능력",
-    "블로그",
-    "LinkedIn",
-    "Instagram",
-    "Facebook",
-    "Github",
-    "Youtube",
-    "X",
-    "Introduce",
-  ],
+  "About Me": aboutMeFields,
   Experience: [],
   "Side Project": [],
   "Skill Stack": [],
@@ -219,6 +199,304 @@ const resumeCategories = {
   어학성적: [],
   "그 외 활동": [],
 };
+
+const categoryLabels: Record<string, string> = {
+  "About Me": "기본 정보",
+  Experience: "경력",
+  "Side Project": "사이드 프로젝트",
+  "Skill Stack": "스킬 스택",
+  Education: "교육",
+  자격증: "자격증",
+  어학성적: "어학 성적",
+  "그 외 활동": "그 외 활동",
+};
+
+// 사이트 공통 다크 톤에 맞춘 입력 요소 스타일
+const labelClass = "mb-2 block text-sm font-medium text-gray-300";
+const inputClass =
+  "border-gray-600 bg-gray-900 text-white [color-scheme:dark] placeholder:text-gray-500 focus-visible:ring-gray-400 focus-visible:ring-offset-gray-800";
+const invalidClass = "border-red-500 focus-visible:ring-red-500";
+const textareaClass =
+  "flex min-h-[80px] w-full rounded-md border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2";
+const checkboxClass =
+  "cursor-pointer border-gray-500 focus-visible:ring-gray-400 focus-visible:ring-offset-gray-900 data-[state=checked]:border-white data-[state=checked]:bg-white data-[state=checked]:text-gray-900";
+const panelClass = "rounded-lg border border-gray-700 bg-gray-800";
+const outlineButtonClass =
+  "cursor-pointer border-gray-600 bg-transparent text-white hover:border-gray-500 hover:bg-gray-800 hover:text-white";
+const primaryButtonClass =
+  "cursor-pointer bg-white text-gray-900 hover:bg-gray-200";
+
+const aboutMeConfig: Record<
+  string,
+  { label: string; placeholder?: string; type?: string; half?: boolean }
+> = {
+  사진: { label: "사진" },
+  이름: { label: "이름", placeholder: "홍길동", half: true },
+  Role: { label: "직무", placeholder: "예: 백엔드 개발자", half: true },
+  이메일: {
+    label: "이메일",
+    placeholder: "name@example.com",
+    type: "email",
+    half: true,
+  },
+  전화번호: {
+    label: "전화번호",
+    placeholder: "010-1234-5678",
+    type: "tel",
+    half: true,
+  },
+  주소: { label: "주소", placeholder: "예: 서울시 강남구" },
+  "영어 구사 능력": { label: "영어 구사 능력", half: true },
+  블로그: {
+    label: "블로그",
+    placeholder: "https://blog.example.com",
+    half: true,
+  },
+  LinkedIn: {
+    label: "LinkedIn",
+    placeholder: "https://www.linkedin.com/in/username",
+    half: true,
+  },
+  Instagram: {
+    label: "Instagram",
+    placeholder: "https://www.instagram.com/username",
+    half: true,
+  },
+  Facebook: {
+    label: "Facebook",
+    placeholder: "https://www.facebook.com/username",
+    half: true,
+  },
+  Github: {
+    label: "GitHub",
+    placeholder: "https://github.com/username",
+    half: true,
+  },
+  Youtube: {
+    label: "YouTube",
+    placeholder: "https://www.youtube.com/@username",
+    half: true,
+  },
+  X: { label: "X", placeholder: "https://x.com/username", half: true },
+  Introduce: {
+    label: "자기소개",
+    placeholder: "나를 소개하는 글을 입력하세요",
+  },
+};
+
+type ItemField = {
+  key: string;
+  label: string;
+  required?: boolean;
+  type?: "url" | "month" | "skills" | "textarea";
+  placeholder?: string;
+  hint?: string;
+  half?: boolean;
+};
+
+const itemConfigs: Record<
+  string,
+  {
+    label: string;
+    titleKey: string;
+    startKey?: string;
+    endKey?: string;
+    ongoing?: string;
+    fields: ItemField[];
+  }
+> = {
+  Experience: {
+    label: "경력",
+    titleKey: "회사명",
+    startKey: "시작일",
+    endKey: "종료일",
+    ongoing: "재직중",
+    fields: [
+      {
+        key: "회사명",
+        label: "근무회사명",
+        required: true,
+        placeholder: "회사명을 입력하세요",
+      },
+      {
+        key: "Role",
+        label: "직무",
+        placeholder: "예: Python Backend, Python Chapter Lead",
+      },
+      { key: "시작일", label: "시작일", type: "month", half: true },
+      {
+        key: "종료일",
+        label: "종료일",
+        type: "month",
+        half: true,
+        hint: "비워두면 재직중으로 표시됩니다",
+      },
+      { key: "스킬", label: "기술 스택", type: "skills" },
+      {
+        key: "작업내용",
+        label: "주요 작업 내용",
+        type: "textarea",
+        placeholder: "주요 작업 내용을 입력하세요",
+      },
+    ],
+  },
+  "Side Project": {
+    label: "프로젝트",
+    titleKey: "프로젝트명",
+    startKey: "시작일",
+    endKey: "종료일",
+    ongoing: "진행중",
+    fields: [
+      {
+        key: "프로젝트명",
+        label: "사이드 프로젝트 명",
+        required: true,
+        placeholder: "프로젝트명을 입력하세요",
+      },
+      {
+        key: "시작일",
+        label: "시작일",
+        required: true,
+        type: "month",
+        half: true,
+      },
+      {
+        key: "종료일",
+        label: "종료일",
+        type: "month",
+        half: true,
+        hint: "비워두면 진행중으로 표시됩니다",
+      },
+      { key: "기술스택", label: "기술 스택", type: "skills" },
+      {
+        key: "링크",
+        label: "링크",
+        type: "url",
+        placeholder: "https://example.com",
+      },
+      {
+        key: "주요작업",
+        label: "주요 작업",
+        type: "textarea",
+        placeholder: "주요 작업 내용을 입력하세요",
+      },
+    ],
+  },
+  Education: {
+    label: "교육",
+    titleKey: "기관명",
+    startKey: "시작일",
+    endKey: "종료일",
+    ongoing: "재학중",
+    fields: [
+      {
+        key: "기관명",
+        label: "교육 기관명",
+        required: true,
+        placeholder: "교육 기관명을 입력하세요",
+      },
+      {
+        key: "전공",
+        label: "전공 (선택사항)",
+        placeholder: "전공을 입력하세요",
+      },
+      {
+        key: "시작일",
+        label: "시작일",
+        required: true,
+        type: "month",
+        half: true,
+      },
+      {
+        key: "종료일",
+        label: "종료일",
+        type: "month",
+        half: true,
+        hint: "비워두면 재학중으로 표시됩니다",
+      },
+      {
+        key: "내용",
+        label: "교육 내용",
+        type: "textarea",
+        placeholder: "교육 내용을 입력하세요",
+      },
+    ],
+  },
+  자격증: {
+    label: "자격증",
+    titleKey: "자격증명",
+    startKey: "취득일",
+    fields: [
+      {
+        key: "자격증명",
+        label: "자격증명",
+        required: true,
+        placeholder: "자격증명을 입력하세요",
+      },
+      {
+        key: "발급기관",
+        label: "발급기관",
+        placeholder: "발급기관을 입력하세요",
+        half: true,
+      },
+      { key: "취득일", label: "취득일", type: "month", half: true },
+    ],
+  },
+  어학성적: {
+    label: "어학 성적",
+    titleKey: "시험명",
+    startKey: "응시일자",
+    fields: [
+      {
+        key: "시험명",
+        label: "시험명",
+        required: true,
+        placeholder: "예: TOEIC, TOEFL, IELTS",
+      },
+      { key: "점수", label: "점수", placeholder: "예: 950, 7.5", half: true },
+      { key: "응시일자", label: "응시 일자", type: "month", half: true },
+    ],
+  },
+  "그 외 활동": {
+    label: "활동",
+    titleKey: "활동명",
+    fields: [
+      {
+        key: "활동명",
+        label: "활동명",
+        required: true,
+        placeholder: "활동명을 입력하세요",
+      },
+      {
+        key: "링크",
+        label: "링크",
+        type: "url",
+        placeholder: "https://example.com",
+      },
+      {
+        key: "내용",
+        label: "활동 내용",
+        type: "textarea",
+        placeholder: "활동 내용을 입력하세요",
+      },
+    ],
+  },
+};
+
+const parseSkillSelection = (value: string | undefined): string[] => {
+  try {
+    const parsed = JSON.parse(value || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const splitSkills = (value: string | undefined) =>
+  (value || "")
+    .split(",")
+    .map((skill) => skill.trim())
+    .filter((skill) => skill.length > 0);
 
 // 스킬 스택 차트 컴포넌트
 const SkillStackChart = React.memo(
@@ -552,7 +830,6 @@ const SkillInput = React.memo(
         <Input
           ref={inputRef}
           id={fieldName}
-          name={fieldName}
           value={inputValue}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
@@ -562,19 +839,19 @@ const SkillInput = React.memo(
             }
           }}
           placeholder="예: Python, Flask, AWS (쉼표로 구분)"
-          className="w-full"
+          className={cn(inputClass, "w-full")}
         />
         {showSuggestions && suggestions.length > 0 && (
           <div
             ref={suggestionsRef}
-            className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-auto"
+            className="absolute z-50 w-full mt-1 bg-gray-900 border border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto"
           >
             {suggestions.map((suggestion) => (
               <button
                 key={suggestion.id}
                 type="button"
                 onClick={() => handleSuggestionClick(suggestion)}
-                className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-colors"
+                className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 cursor-pointer transition-colors"
               >
                 {suggestion.name}
               </button>
@@ -583,21 +860,18 @@ const SkillInput = React.memo(
         )}
         {selectedSkills.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-3">
-            {selectedSkills.map((skill, idx) => {
-              const variants = ["default", "secondary", "outline"] as const;
-              const variant = variants[idx % variants.length];
-              return (
-                <Badge
-                  key={idx}
-                  variant={variant}
-                  className="cursor-pointer"
-                  onClick={() => removeSkill(skill)}
-                >
-                  {skill}
-                  <X className="h-3 w-3 ml-1 inline" />
-                </Badge>
-              );
-            })}
+            {selectedSkills.map((skill) => (
+              <button
+                key={skill}
+                type="button"
+                aria-label={`${skill} 삭제`}
+                onClick={() => removeSkill(skill)}
+                className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-gray-700 px-2.5 py-0.5 text-xs font-medium text-gray-100 transition-colors hover:bg-gray-600"
+              >
+                {skill}
+                <X className="h-3 w-3" />
+              </button>
+            ))}
           </div>
         )}
       </div>
@@ -605,24 +879,31 @@ const SkillInput = React.memo(
   }
 );
 
-// Experience 카드 컴포넌트 (통합 컴포넌트 - 외부 선언)
-const ExperienceCard = React.memo(
+// 경력, 프로젝트 등 반복 항목 카드 (필드 구성은 itemConfigs에서 결정)
+const ItemCard = React.memo(
   ({
     itemId,
     index,
     category,
     formData,
+    collapsed,
+    errorField,
     onInputChange,
+    onToggleCollapse,
     onRemove,
   }: {
     itemId: string;
     index: number;
     category: string;
     formData: Record<string, string>;
+    collapsed: boolean;
+    errorField?: string;
     onInputChange: (field: string, value: string) => void;
-    onRemove: () => void;
+    onToggleCollapse: (itemId: string) => void;
+    onRemove: (category: string, itemId: string) => void;
   }) => {
-    const id = `${category}_${itemId}`;
+    const config = itemConfigs[category];
+    const [isConfirmingRemove, setIsConfirmingRemove] = React.useState(false);
 
     const {
       attributes,
@@ -632,7 +913,7 @@ const ExperienceCard = React.memo(
       transition,
       isDragging,
     } = useSortable({
-      id,
+      id: `${category}_${itemId}`,
     });
 
     const style = {
@@ -641,970 +922,160 @@ const ExperienceCard = React.memo(
       opacity: isDragging ? 0.5 : 1,
     };
 
+    const heading = `${config.label} ${index + 1}`;
+    const title = formData[`${itemId}_${config.titleKey}`]?.trim();
+    const start = config.startKey && formData[`${itemId}_${config.startKey}`];
+    const end = config.endKey && formData[`${itemId}_${config.endKey}`];
+    const period = start
+      ? config.endKey
+        ? `${start} ~ ${end || config.ongoing}`
+        : start
+      : "";
+
+    const renderField = (field: ItemField) => {
+      const fieldId = `${itemId}_${field.key}`;
+      const value = formData[fieldId] || "";
+      const isInvalid = errorField === fieldId;
+      const fieldClass = cn(inputClass, isInvalid && invalidClass);
+
+      return (
+        <div key={field.key} className={field.half ? "" : "sm:col-span-2"}>
+          <label htmlFor={fieldId} className={labelClass}>
+            {field.label}
+            {field.required && <span className="ml-1 text-red-400">*</span>}
+          </label>
+          {field.type === "skills" ? (
+            <SkillInput
+              itemId={itemId}
+              value={value}
+              onInputChange={onInputChange}
+              fieldName={fieldId}
+            />
+          ) : field.type === "textarea" ? (
+            <textarea
+              id={fieldId}
+              rows={6}
+              value={value}
+              onChange={(e) => onInputChange(fieldId, e.target.value)}
+              className={cn(textareaClass, fieldClass)}
+              placeholder={field.placeholder}
+            />
+          ) : (
+            <Input
+              id={fieldId}
+              type={field.type || "text"}
+              value={value}
+              aria-invalid={isInvalid}
+              onChange={(e) => onInputChange(fieldId, e.target.value)}
+              placeholder={field.placeholder}
+              className={fieldClass}
+            />
+          )}
+          {field.hint && (
+            <p className="mt-1.5 text-xs text-gray-400">{field.hint}</p>
+          )}
+        </div>
+      );
+    };
+
     return (
-      <div ref={setNodeRef} style={style} className="mb-8">
-        <div className="p-6 border rounded-lg bg-card relative">
-          <div
+      <div
+        ref={setNodeRef}
+        style={style}
+        id={`item-${itemId}`}
+        className={cn(panelClass, "scroll-mt-4")}
+      >
+        <div className="flex items-center gap-1 p-2 sm:gap-2 sm:p-3">
+          <button
+            type="button"
             {...attributes}
             {...listeners}
-            className="absolute left-2 top-2 cursor-move text-gray-400 hover:text-gray-600 touch-none"
+            aria-label={`${heading} 순서 변경`}
+            className="cursor-move touch-none rounded-md p-1 text-gray-500 hover:text-gray-300"
           >
             <GripVertical className="h-5 w-5" />
-          </div>
-
-          {/* 내부 콘텐츠 직접 렌더링 */}
-          <div className="flex items-center justify-between mb-4 pl-6">
-            <h3 className="text-lg font-semibold">경력 {index + 1}</h3>
+          </button>
+          <button
+            type="button"
+            onClick={() => onToggleCollapse(itemId)}
+            aria-expanded={!collapsed}
+            className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-1 py-1 text-left"
+          >
+            <ChevronDown
+              className={cn(
+                "h-4 w-4 shrink-0 text-gray-400 transition-transform duration-200",
+                collapsed && "-rotate-90"
+              )}
+            />
+            <span className="min-w-0">
+              <span className="block truncate font-semibold text-white">
+                {title || heading}
+              </span>
+              {period && (
+                <span className="block truncate text-xs text-gray-400">
+                  {period}
+                </span>
+              )}
+            </span>
+          </button>
+          {isConfirmingRemove ? (
+            <div className="flex shrink-0 items-center gap-1">
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => onRemove(category, itemId)}
+                className="h-8 cursor-pointer bg-red-600 px-2 text-white hover:bg-red-700"
+              >
+                삭제
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setIsConfirmingRemove(false)}
+                className="h-8 cursor-pointer px-2 text-gray-300 hover:bg-gray-700 hover:text-white"
+              >
+                취소
+              </Button>
+            </div>
+          ) : (
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
-              onClick={onRemove}
+              aria-label={`${heading} 삭제`}
+              className="h-8 w-8 shrink-0 cursor-pointer text-gray-400 hover:bg-gray-700 hover:text-white"
+              onClick={() => setIsConfirmingRemove(true)}
             >
-              <X className="h-4 w-4" />
+              <Trash2 className="h-4 w-4" />
             </Button>
-          </div>
-          <div className="space-y-4">
-            <div>
-              <label
-                htmlFor={`${itemId}_회사명`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                근무회사명 <span className="text-red-500">*</span>
-              </label>
-              <Input
-                id={`${itemId}_회사명`}
-                name={`${itemId}_회사명`}
-                value={formData[`${itemId}_회사명`] || ""}
-                onChange={(e) =>
-                  onInputChange(`${itemId}_회사명`, e.target.value)
-                }
-                placeholder="회사명을 입력하세요"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor={`${itemId}_Role`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                Role
-              </label>
-              <Input
-                id={`${itemId}_Role`}
-                name={`${itemId}_Role`}
-                value={formData[`${itemId}_Role`] || ""}
-                onChange={(e) =>
-                  onInputChange(`${itemId}_Role`, e.target.value)
-                }
-                placeholder="예: Python Backend, Python Chapter Lead"
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="w-full">
-                <label
-                  htmlFor={`${itemId}_시작일`}
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                >
-                  시작일
-                </label>
-                <Input
-                  id={`${itemId}_시작일`}
-                  name={`${itemId}_시작일`}
-                  type="month"
-                  value={formData[`${itemId}_시작일`] || ""}
-                  onChange={(e) =>
-                    onInputChange(`${itemId}_시작일`, e.target.value)
-                  }
-                  placeholder="예: 2019-01"
-                  className="w-full"
-                />
-              </div>
-              <div className="w-full">
-                <label
-                  htmlFor={`${itemId}_종료일`}
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                >
-                  종료일
-                </label>
-                <Input
-                  id={`${itemId}_종료일`}
-                  name={`${itemId}_종료일`}
-                  type="month"
-                  value={formData[`${itemId}_종료일`] || ""}
-                  onChange={(e) =>
-                    onInputChange(`${itemId}_종료일`, e.target.value)
-                  }
-                  placeholder="예: 2024-01 또는 현재"
-                  className="w-full"
-                />
-              </div>
-            </div>
-            <div>
-              <label
-                htmlFor={`${itemId}_스킬`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                기술 스택
-              </label>
-              <SkillInput
-                itemId={itemId}
-                value={formData[`${itemId}_스킬`] || ""}
-                onInputChange={onInputChange}
-                fieldName={`${itemId}_스킬`}
-              />
-            </div>
-            <div>
-              <label
-                htmlFor={`${itemId}_작업내용`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                주요 작업 내용
-              </label>
-              <textarea
-                id={`${itemId}_작업내용`}
-                name={`${itemId}_작업내용`}
-                rows={6}
-                value={formData[`${itemId}_작업내용`] || ""}
-                onChange={(e) =>
-                  onInputChange(`${itemId}_작업내용`, e.target.value)
-                }
-                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                placeholder="주요 작업 내용을 입력하세요"
-              />
-            </div>
-          </div>
+          )}
         </div>
+        {!collapsed && (
+          <div className="grid grid-cols-1 gap-4 border-t border-gray-700 p-4 sm:grid-cols-2 sm:p-6">
+            {config.fields.map(renderField)}
+          </div>
+        )}
       </div>
     );
   },
   (prev, next) => {
     // 폼 데이터 중 이 카드와 관련된 값만 바뀌었을 때만 리렌더링하도록 최적화
-    const id = prev.itemId;
     return (
       prev.itemId === next.itemId &&
       prev.index === next.index &&
       prev.category === next.category &&
-      prev.formData[`${id}_회사명`] === next.formData[`${id}_회사명`] &&
-      prev.formData[`${id}_Role`] === next.formData[`${id}_Role`] &&
-      prev.formData[`${id}_시작일`] === next.formData[`${id}_시작일`] &&
-      prev.formData[`${id}_종료일`] === next.formData[`${id}_종료일`] &&
-      prev.formData[`${id}_스킬`] === next.formData[`${id}_스킬`] &&
-      prev.formData[`${id}_작업내용`] === next.formData[`${id}_작업내용`]
+      prev.collapsed === next.collapsed &&
+      prev.errorField === next.errorField &&
+      itemConfigs[prev.category].fields.every(
+        ({ key }) =>
+          prev.formData[`${prev.itemId}_${key}`] ===
+          next.formData[`${next.itemId}_${key}`]
+      )
     );
   }
 );
-
-// Side Project 카드 컴포넌트
-const SideProjectCard = React.memo(
-  ({
-    itemId,
-    index,
-    category,
-    formData,
-    onInputChange,
-    onRemove,
-  }: {
-    itemId: string;
-    index: number;
-    category: string;
-    formData: Record<string, string>;
-    onInputChange: (field: string, value: string) => void;
-    onRemove: () => void;
-  }) => {
-    const id = `${category}_${itemId}`;
-
-    const {
-      attributes,
-      listeners,
-      setNodeRef,
-      transform,
-      transition,
-      isDragging,
-    } = useSortable({
-      id,
-    });
-
-    const style = {
-      transform: CSS.Transform.toString(transform),
-      transition,
-      opacity: isDragging ? 0.5 : 1,
-    };
-
-    return (
-      <div ref={setNodeRef} style={style} className="mb-8">
-        <div className="p-6 border rounded-lg bg-card relative">
-          <div
-            {...attributes}
-            {...listeners}
-            className="absolute left-2 top-2 cursor-move text-gray-400 hover:text-gray-600 touch-none"
-          >
-            <GripVertical className="h-5 w-5" />
-          </div>
-
-          <div className="flex items-center justify-between mb-4 pl-6">
-            <h3 className="text-lg font-semibold">프로젝트 {index + 1}</h3>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={onRemove}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-          <div className="space-y-4">
-            <div>
-              <label
-                htmlFor={`${itemId}_프로젝트명`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                사이드 프로젝트 명 <span className="text-red-500">*</span>
-              </label>
-              <Input
-                id={`${itemId}_프로젝트명`}
-                name={`${itemId}_프로젝트명`}
-                value={formData[`${itemId}_프로젝트명`] || ""}
-                onChange={(e) =>
-                  onInputChange(`${itemId}_프로젝트명`, e.target.value)
-                }
-                placeholder="프로젝트명을 입력하세요"
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="w-full">
-                <label
-                  htmlFor={`${itemId}_시작일`}
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                >
-                  시작일
-                </label>
-                <Input
-                  id={`${itemId}_시작일`}
-                  name={`${itemId}_시작일`}
-                  type="month"
-                  value={formData[`${itemId}_시작일`] || ""}
-                  onChange={(e) =>
-                    onInputChange(`${itemId}_시작일`, e.target.value)
-                  }
-                  placeholder="예: 2023-01"
-                  className="w-full"
-                />
-              </div>
-              <div className="w-full">
-                <label
-                  htmlFor={`${itemId}_종료일`}
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                >
-                  종료일
-                </label>
-                <Input
-                  id={`${itemId}_종료일`}
-                  name={`${itemId}_종료일`}
-                  type="month"
-                  value={formData[`${itemId}_종료일`] || ""}
-                  onChange={(e) =>
-                    onInputChange(`${itemId}_종료일`, e.target.value)
-                  }
-                  placeholder="예: 2023-06 또는 현재"
-                  className="w-full"
-                />
-              </div>
-            </div>
-            <div>
-              <label
-                htmlFor={`${itemId}_기술스택`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                기술 스택
-              </label>
-              <SkillInput
-                itemId={itemId}
-                value={formData[`${itemId}_기술스택`] || ""}
-                onInputChange={onInputChange}
-                fieldName={`${itemId}_기술스택`}
-              />
-            </div>
-            <div>
-              <label
-                htmlFor={`${itemId}_링크`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                링크
-              </label>
-              <Input
-                id={`${itemId}_링크`}
-                name={`${itemId}_링크`}
-                type="url"
-                value={formData[`${itemId}_링크`] || ""}
-                onChange={(e) =>
-                  onInputChange(`${itemId}_링크`, e.target.value)
-                }
-                placeholder="https://example.com"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor={`${itemId}_주요작업`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                주요 작업
-              </label>
-              <textarea
-                id={`${itemId}_주요작업`}
-                name={`${itemId}_주요작업`}
-                rows={6}
-                value={formData[`${itemId}_주요작업`] || ""}
-                onChange={(e) =>
-                  onInputChange(`${itemId}_주요작업`, e.target.value)
-                }
-                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                placeholder="주요 작업 내용을 입력하세요"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  },
-  (prev, next) => {
-    const id = prev.itemId;
-    return (
-      prev.itemId === next.itemId &&
-      prev.index === next.index &&
-      prev.category === next.category &&
-      prev.formData[`${id}_프로젝트명`] === next.formData[`${id}_프로젝트명`] &&
-      prev.formData[`${id}_시작일`] === next.formData[`${id}_시작일`] &&
-      prev.formData[`${id}_종료일`] === next.formData[`${id}_종료일`] &&
-      prev.formData[`${id}_기술스택`] === next.formData[`${id}_기술스택`] &&
-      prev.formData[`${id}_링크`] === next.formData[`${id}_링크`] &&
-      prev.formData[`${id}_주요작업`] === next.formData[`${id}_주요작업`]
-    );
-  }
-);
-
-// Education 카드 컴포넌트
-const EducationCard = React.memo(
-  ({
-    itemId,
-    index,
-    category,
-    formData,
-    onInputChange,
-    onRemove,
-  }: {
-    itemId: string;
-    index: number;
-    category: string;
-    formData: Record<string, string>;
-    onInputChange: (field: string, value: string) => void;
-    onRemove: () => void;
-  }) => {
-    const id = `${category}_${itemId}`;
-
-    const {
-      attributes,
-      listeners,
-      setNodeRef,
-      transform,
-      transition,
-      isDragging,
-    } = useSortable({
-      id,
-    });
-
-    const style = {
-      transform: CSS.Transform.toString(transform),
-      transition,
-      opacity: isDragging ? 0.5 : 1,
-    };
-
-    return (
-      <div ref={setNodeRef} style={style} className="mb-8">
-        <div className="p-6 border rounded-lg bg-card relative">
-          <div
-            {...attributes}
-            {...listeners}
-            className="absolute left-2 top-2 cursor-move text-gray-400 hover:text-gray-600 touch-none"
-          >
-            <GripVertical className="h-5 w-5" />
-          </div>
-
-          <div className="flex items-center justify-between mb-4 pl-6">
-            <h3 className="text-lg font-semibold">교육 {index + 1}</h3>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={onRemove}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-          <div className="space-y-4">
-            <div>
-              <label
-                htmlFor={`${itemId}_기관명`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                교육 기관명 <span className="text-red-500">*</span>
-              </label>
-              <Input
-                id={`${itemId}_기관명`}
-                name={`${itemId}_기관명`}
-                value={formData[`${itemId}_기관명`] || ""}
-                onChange={(e) =>
-                  onInputChange(`${itemId}_기관명`, e.target.value)
-                }
-                placeholder="교육 기관명을 입력하세요"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor={`${itemId}_전공`}
-                className="block text-xs font-medium text-gray-400 dark:text-gray-500 mb-1.5"
-              >
-                전공 (선택사항)
-              </label>
-              <Input
-                id={`${itemId}_전공`}
-                name={`${itemId}_전공`}
-                value={formData[`${itemId}_전공`] || ""}
-                onChange={(e) =>
-                  onInputChange(`${itemId}_전공`, e.target.value)
-                }
-                placeholder="전공을 입력하세요"
-                className="text-gray-600 dark:text-gray-400 placeholder:text-gray-400 dark:placeholder:text-gray-500"
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="w-full">
-                <label
-                  htmlFor={`${itemId}_시작일`}
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                >
-                  시작일
-                </label>
-                <Input
-                  id={`${itemId}_시작일`}
-                  name={`${itemId}_시작일`}
-                  type="month"
-                  value={formData[`${itemId}_시작일`] || ""}
-                  onChange={(e) =>
-                    onInputChange(`${itemId}_시작일`, e.target.value)
-                  }
-                  placeholder="예: 2018-04"
-                  className="w-full"
-                />
-              </div>
-              <div className="w-full">
-                <label
-                  htmlFor={`${itemId}_종료일`}
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                >
-                  종료일
-                </label>
-                <Input
-                  id={`${itemId}_종료일`}
-                  name={`${itemId}_종료일`}
-                  type="month"
-                  value={formData[`${itemId}_종료일`] || ""}
-                  onChange={(e) =>
-                    onInputChange(`${itemId}_종료일`, e.target.value)
-                  }
-                  placeholder="예: 2018-05"
-                  className="w-full"
-                />
-              </div>
-            </div>
-            <div>
-              <label
-                htmlFor={`${itemId}_내용`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                교육 내용
-              </label>
-              <textarea
-                id={`${itemId}_내용`}
-                name={`${itemId}_내용`}
-                rows={6}
-                value={formData[`${itemId}_내용`] || ""}
-                onChange={(e) =>
-                  onInputChange(`${itemId}_내용`, e.target.value)
-                }
-                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                placeholder="교육 내용을 입력하세요"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  },
-  (prev, next) => {
-    const id = prev.itemId;
-    return (
-      prev.itemId === next.itemId &&
-      prev.index === next.index &&
-      prev.category === next.category &&
-      prev.formData[`${id}_기관명`] === next.formData[`${id}_기관명`] &&
-      prev.formData[`${id}_전공`] === next.formData[`${id}_전공`] &&
-      prev.formData[`${id}_시작일`] === next.formData[`${id}_시작일`] &&
-      prev.formData[`${id}_종료일`] === next.formData[`${id}_종료일`] &&
-      prev.formData[`${id}_내용`] === next.formData[`${id}_내용`]
-    );
-  }
-);
-
-// 자격증 카드 컴포넌트
-const CertificationCard = React.memo(
-  ({
-    itemId,
-    index,
-    category,
-    formData,
-    onInputChange,
-    onRemove,
-  }: {
-    itemId: string;
-    index: number;
-    category: string;
-    formData: Record<string, string>;
-    onInputChange: (field: string, value: string) => void;
-    onRemove: () => void;
-  }) => {
-    const id = `${category}_${itemId}`;
-
-    const {
-      attributes,
-      listeners,
-      setNodeRef,
-      transform,
-      transition,
-      isDragging,
-    } = useSortable({
-      id,
-    });
-
-    const style = {
-      transform: CSS.Transform.toString(transform),
-      transition,
-      opacity: isDragging ? 0.5 : 1,
-    };
-
-    return (
-      <div ref={setNodeRef} style={style} className="mb-8">
-        <div className="p-6 border rounded-lg bg-card relative">
-          <div
-            {...attributes}
-            {...listeners}
-            className="absolute left-2 top-2 cursor-move text-gray-400 hover:text-gray-600 touch-none"
-          >
-            <GripVertical className="h-5 w-5" />
-          </div>
-
-          <div className="flex items-center justify-between mb-4 pl-6">
-            <h3 className="text-lg font-semibold">자격증 {index + 1}</h3>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={onRemove}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-          <div className="space-y-4">
-            <div>
-              <label
-                htmlFor={`${itemId}_자격증명`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                자격증명 <span className="text-red-500">*</span>
-              </label>
-              <Input
-                id={`${itemId}_자격증명`}
-                name={`${itemId}_자격증명`}
-                value={formData[`${itemId}_자격증명`] || ""}
-                onChange={(e) =>
-                  onInputChange(`${itemId}_자격증명`, e.target.value)
-                }
-                placeholder="자격증명을 입력하세요"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor={`${itemId}_발급기관`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                발급기관
-              </label>
-              <Input
-                id={`${itemId}_발급기관`}
-                name={`${itemId}_발급기관`}
-                value={formData[`${itemId}_발급기관`] || ""}
-                onChange={(e) =>
-                  onInputChange(`${itemId}_발급기관`, e.target.value)
-                }
-                placeholder="발급기관을 입력하세요"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor={`${itemId}_취득일`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                취득일
-              </label>
-              <Input
-                id={`${itemId}_취득일`}
-                name={`${itemId}_취득일`}
-                type="month"
-                value={formData[`${itemId}_취득일`] || ""}
-                onChange={(e) =>
-                  onInputChange(`${itemId}_취득일`, e.target.value)
-                }
-                placeholder="예: 2024-01"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  },
-  (prev, next) => {
-    const id = prev.itemId;
-    return (
-      prev.itemId === next.itemId &&
-      prev.index === next.index &&
-      prev.category === next.category &&
-      prev.formData[`${id}_자격증명`] === next.formData[`${id}_자격증명`] &&
-      prev.formData[`${id}_발급기관`] === next.formData[`${id}_발급기관`] &&
-      prev.formData[`${id}_취득일`] === next.formData[`${id}_취득일`]
-    );
-  }
-);
-
-// 어학성적 카드 컴포넌트
-const LanguageTestCard = React.memo(
-  ({
-    itemId,
-    index,
-    category,
-    formData,
-    onInputChange,
-    onRemove,
-  }: {
-    itemId: string;
-    index: number;
-    category: string;
-    formData: Record<string, string>;
-    onInputChange: (field: string, value: string) => void;
-    onRemove: () => void;
-  }) => {
-    const id = `${category}_${itemId}`;
-
-    const {
-      attributes,
-      listeners,
-      setNodeRef,
-      transform,
-      transition,
-      isDragging,
-    } = useSortable({
-      id,
-    });
-
-    const style = {
-      transform: CSS.Transform.toString(transform),
-      transition,
-      opacity: isDragging ? 0.5 : 1,
-    };
-
-    return (
-      <div ref={setNodeRef} style={style} className="mb-8">
-        <div className="p-6 border rounded-lg bg-card relative">
-          <div
-            {...attributes}
-            {...listeners}
-            className="absolute left-2 top-2 cursor-move text-gray-400 hover:text-gray-600 touch-none"
-          >
-            <GripVertical className="h-5 w-5" />
-          </div>
-
-          <div className="flex items-center justify-between mb-4 pl-6">
-            <h3 className="text-lg font-semibold">어학 성적 {index + 1}</h3>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={onRemove}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-          <div className="space-y-4">
-            <div>
-              <label
-                htmlFor={`${itemId}_시험명`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                시험명 <span className="text-red-500">*</span>
-              </label>
-              <Input
-                id={`${itemId}_시험명`}
-                name={`${itemId}_시험명`}
-                value={formData[`${itemId}_시험명`] || ""}
-                onChange={(e) =>
-                  onInputChange(`${itemId}_시험명`, e.target.value)
-                }
-                placeholder="예: TOEIC, TOEFL, IELTS"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor={`${itemId}_점수`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                점수
-              </label>
-              <Input
-                id={`${itemId}_점수`}
-                name={`${itemId}_점수`}
-                value={formData[`${itemId}_점수`] || ""}
-                onChange={(e) =>
-                  onInputChange(`${itemId}_점수`, e.target.value)
-                }
-                placeholder="예: 950, 7.5"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor={`${itemId}_응시일자`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                응시 일자
-              </label>
-              <Input
-                id={`${itemId}_응시일자`}
-                name={`${itemId}_응시일자`}
-                type="month"
-                value={formData[`${itemId}_응시일자`] || ""}
-                onChange={(e) =>
-                  onInputChange(`${itemId}_응시일자`, e.target.value)
-                }
-                placeholder="예: 2024-01"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  },
-  (prev, next) => {
-    const id = prev.itemId;
-    return (
-      prev.itemId === next.itemId &&
-      prev.index === next.index &&
-      prev.category === next.category &&
-      prev.formData[`${id}_시험명`] === next.formData[`${id}_시험명`] &&
-      prev.formData[`${id}_점수`] === next.formData[`${id}_점수`] &&
-      prev.formData[`${id}_응시일자`] === next.formData[`${id}_응시일자`]
-    );
-  }
-);
-
-// etc 카드 컴포넌트
-const EtcCard = React.memo(
-  ({
-    itemId,
-    index,
-    category,
-    formData,
-    onInputChange,
-    onRemove,
-  }: {
-    itemId: string;
-    index: number;
-    category: string;
-    formData: Record<string, string>;
-    onInputChange: (field: string, value: string) => void;
-    onRemove: () => void;
-  }) => {
-    const id = `${category}_${itemId}`;
-
-    const {
-      attributes,
-      listeners,
-      setNodeRef,
-      transform,
-      transition,
-      isDragging,
-    } = useSortable({
-      id,
-    });
-
-    const style = {
-      transform: CSS.Transform.toString(transform),
-      transition,
-      opacity: isDragging ? 0.5 : 1,
-    };
-
-    return (
-      <div ref={setNodeRef} style={style} className="mb-8">
-        <div className="p-6 border rounded-lg bg-card relative">
-          <div
-            {...attributes}
-            {...listeners}
-            className="absolute left-2 top-2 cursor-move text-gray-400 hover:text-gray-600 touch-none"
-          >
-            <GripVertical className="h-5 w-5" />
-          </div>
-
-          <div className="flex items-center justify-between mb-4 pl-6">
-            <h3 className="text-lg font-semibold">활동 {index + 1}</h3>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={onRemove}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-          <div className="space-y-4">
-            <div>
-              <label
-                htmlFor={`${itemId}_활동명`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                활동명 <span className="text-red-500">*</span>
-              </label>
-              <Input
-                id={`${itemId}_활동명`}
-                name={`${itemId}_활동명`}
-                value={formData[`${itemId}_활동명`] || ""}
-                onChange={(e) =>
-                  onInputChange(`${itemId}_활동명`, e.target.value)
-                }
-                placeholder="활동명을 입력하세요"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor={`${itemId}_링크`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                링크
-              </label>
-              <Input
-                id={`${itemId}_링크`}
-                name={`${itemId}_링크`}
-                type="url"
-                value={formData[`${itemId}_링크`] || ""}
-                onChange={(e) =>
-                  onInputChange(`${itemId}_링크`, e.target.value)
-                }
-                placeholder="https://example.com"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor={`${itemId}_내용`}
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                활동 내용
-              </label>
-              <textarea
-                id={`${itemId}_내용`}
-                name={`${itemId}_내용`}
-                rows={6}
-                value={formData[`${itemId}_내용`] || ""}
-                onChange={(e) =>
-                  onInputChange(`${itemId}_내용`, e.target.value)
-                }
-                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                placeholder="활동 내용을 입력하세요"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  },
-  (prev, next) => {
-    const id = prev.itemId;
-    return (
-      prev.itemId === next.itemId &&
-      prev.index === next.index &&
-      prev.category === next.category &&
-      prev.formData[`${id}_활동명`] === next.formData[`${id}_활동명`] &&
-      prev.formData[`${id}_링크`] === next.formData[`${id}_링크`] &&
-      prev.formData[`${id}_내용`] === next.formData[`${id}_내용`]
-    );
-  }
-);
-
-// 드래그 가능한 카드 컴포넌트 (다른 카테고리용)
-const DraggableCard = React.memo(
-  ({
-    field,
-    category,
-    index,
-    children,
-  }: {
-    field: string;
-    category: string;
-    index: number;
-    children: React.ReactNode;
-  }) => {
-    const id = `${category}_${field}`;
-
-    const {
-      attributes,
-      listeners,
-      setNodeRef,
-      transform,
-      transition,
-      isDragging,
-    } = useSortable({
-      id,
-    });
-
-    const style = {
-      transform: CSS.Transform.toString(transform),
-      transition,
-      opacity: isDragging ? 0.5 : 1,
-    };
-
-    return (
-      <div ref={setNodeRef} style={style} className="mb-8">
-        <div className="p-6 border rounded-lg bg-card relative">
-          <div
-            {...attributes}
-            {...listeners}
-            className="absolute left-2 top-2 cursor-move text-gray-400 hover:text-gray-600 touch-none"
-          >
-            <GripVertical className="h-5 w-5" />
-          </div>
-          {children}
-        </div>
-      </div>
-    );
-  },
-  (prevProps, nextProps) => {
-    return (
-      prevProps.field === nextProps.field &&
-      prevProps.category === nextProps.category &&
-      prevProps.index === nextProps.index
-    );
-  }
-);
+ItemCard.displayName = "ItemCard";
 
 export default function AddResume({ loaderData }: Route.ComponentProps) {
   const navigate = useNavigate();
@@ -1612,17 +1083,21 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
   const { toast, showToast, hideToast } = useToast();
   const isEditMode = !!loaderData?.resume;
 
-  // 초기 선택 필드 (모두 비어있음)
-  const getInitialSelectedFields = () => {
-    return {} as Record<string, boolean>;
-  };
-
   // 기존 데이터로 초기화
   const initializeFromLoaderData = () => {
     if (!loaderData?.resume) {
       return {
-        selectedFields: getInitialSelectedFields(),
-        formData: {} as Record<string, string>,
+        // 새 이력서는 대부분 쓰는 항목을 미리 열어둠 (이름은 필수)
+        selectedFields: {
+          이름: true,
+          Role: true,
+          이메일: true,
+          전화번호: true,
+          Introduce: true,
+        } as Record<string, boolean>,
+        formData: (loaderData?.defaultEmail
+          ? { 이메일: loaderData.defaultEmail }
+          : {}) as Record<string, string>,
         dynamicItems: {
           Experience: [],
           "Side Project": [],
@@ -1630,14 +1105,14 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
           자격증: [],
           어학성적: [],
           "그 외 활동": [],
-        },
+        } as Record<string, string[]>,
         resumeTitle: "",
       };
     }
 
     const resume = loaderData.resume;
     const formData: Record<string, string> = {};
-    const selectedFields: Record<string, boolean> = {};
+    const selectedFields: Record<string, boolean> = { 이름: true };
     const dynamicItems: Record<string, string[]> = {
       Experience: [],
       "Side Project": [],
@@ -1833,24 +1308,74 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
     initialData.formData
   );
   const [isPreviewMode, setIsPreviewMode] = React.useState(false);
-  const [showTitleDialog, setShowTitleDialog] = React.useState(false);
-  const [showSkillStackDialog, setShowSkillStackDialog] = React.useState(false);
+  const [isSectionPanelOpen, setIsSectionPanelOpen] = React.useState(false);
   const [resumeTitle, setResumeTitle] = React.useState(initialData.resumeTitle);
   const [isUploadingPhoto, setIsUploadingPhoto] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
+  const [fieldError, setFieldError] = React.useState<{
+    field: string;
+    message: string;
+  } | null>(null);
   const [openCategories, setOpenCategories] = React.useState<
     Record<string, boolean>
   >({
     "About Me": true,
   });
 
+  // 동적 항목 관리 (Experience, Side Project 등)
+  const [dynamicItems, setDynamicItems] = React.useState<
+    Record<string, string[]>
+  >(initialData.dynamicItems);
+  // 저장된 항목은 접어서 시작해 긴 이력서도 한눈에 볼 수 있게 함
+  const [collapsedItems, setCollapsedItems] = React.useState<
+    Record<string, boolean>
+  >(() =>
+    Object.fromEntries(
+      Object.values(initialData.dynamicItems)
+        .flat()
+        .map((itemId) => [itemId, true])
+    )
+  );
+  const pendingFocusRef = React.useRef<string | null>(null);
+
+  const draft = {
+    title: resumeTitle,
+    formData,
+    selectedFields,
+    dynamicItems,
+  };
+  const getVisibleItems = (category: string) =>
+    visibleResumeItems({ selectedFields, dynamicItems }, category);
+
+  // 저장하지 않은 변경 사항 감지 (상태 객체가 초기값에서 바뀌었는지 비교)
+  const isDirty =
+    formData !== initialData.formData ||
+    selectedFields !== initialData.selectedFields ||
+    dynamicItems !== initialData.dynamicItems ||
+    resumeTitle !== initialData.resumeTitle;
+  const isSubmitting = isSaving || fetcher.state !== "idle";
+
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      isDirty &&
+      !isSubmitting &&
+      currentLocation.pathname !== nextLocation.pathname
+  );
+
+  React.useEffect(() => {
+    if (!isDirty || isSubmitting) return;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isDirty, isSubmitting]);
+
   // 저장 상태 모니터링 및 에러 처리
   React.useEffect(() => {
     if (fetcher.data) {
       setIsSaving(false); // 저장 완료 또는 에러 발생 시 로딩 상태 해제
       if (fetcher.data.error) {
-        showToast(fetcher.data.error, "error");
-      } else if (fetcher.data.success === false && fetcher.data.error) {
         showToast(fetcher.data.error, "error");
       }
     }
@@ -1863,15 +1388,24 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
     }
   }, [fetcher.state, fetcher.data]);
 
-  // 동적 항목 관리 (Experience, Side Project 등)
-  const [dynamicItems, setDynamicItems] = React.useState<
-    Record<string, string[]>
-  >(initialData.dynamicItems);
+  // 검증에 실패한 입력칸으로 바로 이동
+  React.useEffect(() => {
+    if (fieldError) document.getElementById(fieldError.field)?.focus();
+  }, [fieldError]);
+
+  // 새로 추가한 항목의 첫 입력칸으로 이동
+  React.useEffect(() => {
+    if (!pendingFocusRef.current) return;
+    document.getElementById(pendingFocusRef.current)?.focus();
+    pendingFocusRef.current = null;
+  }, [dynamicItems]);
 
   // 동적 항목 추가
   const handleAddDynamicItem = (category: string) => {
-    const timestamp = Date.now();
-    const newItemId = `${category}_${timestamp}`;
+    const newItemId = `${category}_${Date.now()}`;
+    pendingFocusRef.current = `${newItemId}_${itemConfigs[category].titleKey}`;
+    setIsPreviewMode(false);
+    setIsSectionPanelOpen(false);
     setDynamicItems((prev) => ({
       ...prev,
       [category]: [...prev[category], newItemId],
@@ -1879,31 +1413,50 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
     // 자동으로 체크박스도 선택
     setSelectedFields((prev) => ({
       ...prev,
+      [category]: true,
       [newItemId]: true,
     }));
   };
 
   // 동적 항목 삭제
-  const handleRemoveDynamicItem = (category: string, itemId: string) => {
-    setDynamicItems((prev) => ({
-      ...prev,
-      [category]: prev[category].filter((id) => id !== itemId),
-    }));
-    // 관련된 모든 폼 데이터 삭제
-    setFormData((prev) => {
-      const newData = { ...prev };
-      Object.keys(newData).forEach((key) => {
-        if (key.startsWith(itemId)) {
-          delete newData[key];
-        }
+  const handleRemoveDynamicItem = React.useCallback(
+    (category: string, itemId: string) => {
+      setDynamicItems((prev) => ({
+        ...prev,
+        [category]: prev[category].filter((id) => id !== itemId),
+      }));
+      // 관련된 모든 폼 데이터 삭제
+      setFormData((prev) => {
+        const newData = { ...prev };
+        Object.keys(newData).forEach((key) => {
+          if (key.startsWith(`${itemId}_`)) {
+            delete newData[key];
+          }
+        });
+        return newData;
       });
-      return newData;
-    });
-    // 체크박스도 해제
-    setSelectedFields((prev) => {
-      const newData = { ...prev };
-      delete newData[itemId];
-      return newData;
+      // 체크박스도 해제
+      setSelectedFields((prev) => {
+        const newData = { ...prev };
+        delete newData[itemId];
+        return newData;
+      });
+    },
+    []
+  );
+
+  const handleToggleCollapse = React.useCallback((itemId: string) => {
+    setCollapsedItems((prev) => ({ ...prev, [itemId]: !prev[itemId] }));
+  }, []);
+
+  const handleJumpToItem = (itemId: string) => {
+    setIsPreviewMode(false);
+    setIsSectionPanelOpen(false);
+    setCollapsedItems((prev) => ({ ...prev, [itemId]: false }));
+    requestAnimationFrame(() => {
+      document
+        .getElementById(`item-${itemId}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   };
 
@@ -1954,26 +1507,19 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
         distance: 8, // 8px 이동해야 드래그 시작
       },
     }),
-    useSensor(KeyboardSensor)
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
   );
 
+  // 체크를 해제해도 입력값은 유지하고, 저장할 때만 제외함
   const handleCheckboxChange = (field: string) => {
-    // Skill Stack의 경우 다이얼로그 열기
-    if (field === "Skill Stack") {
-      if (!selectedFields[field]) {
-        setShowSkillStackDialog(true);
-      } else {
-        // 체크 해제 시 선택한 기술도 제거
-        setSelectedFields((prev) => ({
-          ...prev,
-          [field]: false,
-        }));
-        setFormData((prev) => {
-          const newData = { ...prev };
-          delete newData["skill_stack_selected"];
-          return newData;
-        });
-      }
+    if (
+      detailCategories.includes(field) &&
+      !selectedFields[field] &&
+      dynamicItems[field].length === 0
+    ) {
+      handleAddDynamicItem(field);
       return;
     }
 
@@ -1981,20 +1527,11 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
       ...prev,
       [field]: !prev[field],
     }));
-
-    // 미리보기 모드가 아닐 때만 체크 해제 시 폼 데이터 제거
-    // 미리보기 모드에서는 데이터를 유지하여 비교 가능하도록 함
-    if (!isPreviewMode && selectedFields[field]) {
-      setFormData((prev) => {
-        const newData = { ...prev };
-        delete newData[field];
-        return newData;
-      });
-    }
   };
 
   const handleInputChange = React.useCallback(
     (field: string, value: string) => {
+      setFieldError((prev) => (prev?.field === field ? null : prev));
       setFormData((prev) => ({
         ...prev,
         [field]: value,
@@ -2003,107 +1540,57 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
     []
   );
 
+  const handleSkillToggle = (skill: string) => {
+    const current = parseSkillSelection(formData["skill_stack_selected"]);
+    const next = current.includes(skill)
+      ? current.filter((s) => s !== skill)
+      : [...current, skill].slice(0, 6);
+    handleInputChange("skill_stack_selected", JSON.stringify(next));
+  };
+
   const handleSaveResume = () => {
-    if (!resumeTitle.trim()) return;
+    if (isSubmitting) return;
 
-    // 시작 일자 검증
-    // 1. Experience 검증
-    const experienceKeys = Object.keys(formData).filter((key) =>
-      key.startsWith("Experience_")
-    );
-    const experienceItemIds = [
-      ...new Set(
-        experienceKeys.map((key) => {
-          const parts = key.split("_");
-          return parts[0] + "_" + parts[1]; // "Experience_xxx"
-        })
-      ),
-    ];
-    // 경력 항목의 시작일은 필수가 아님 (schema.ts에서 nullable)
-    // 회사명만 필수로 검증
-    for (const itemId of experienceItemIds) {
-      const company = formData[`${itemId}_회사명`];
-      if (!company || company.trim() === "") {
-        showToast("경력 항목의 회사명을 입력해주세요.", "error");
-        return;
+    const error = validateResumeDraft(draft);
+    if (error) {
+      setIsPreviewMode(false);
+      const itemId = Object.values(dynamicItems)
+        .flat()
+        .find((id) => error.field.startsWith(`${id}_`));
+      if (itemId) {
+        setCollapsedItems((prev) => ({ ...prev, [itemId]: false }));
       }
-    }
-
-    // 2. Side Project 검증
-    const sideProjectKeys = Object.keys(formData).filter((key) =>
-      key.startsWith("Side Project_")
-    );
-    const sideProjectItemIds = [
-      ...new Set(
-        sideProjectKeys.map((key) => {
-          const match = key.match(/^(Side Project_[^_]+)/);
-          return match ? match[1] : null;
-        })
-      ),
-    ].filter((id) => id !== null) as string[];
-    for (const itemId of sideProjectItemIds) {
-      const projectName = formData[`${itemId}_프로젝트명`];
-      const startDate = formData[`${itemId}_시작일`];
-
-      // 프로젝트명이 있으면 시작일은 필수
-      if (projectName && !startDate) {
-        showToast("사이드 프로젝트 항목의 시작일을 입력해주세요.", "error");
-        return;
-      }
-    }
-
-    // 3. Education 검증
-    const educationKeys = Object.keys(formData).filter((key) =>
-      key.startsWith("Education_")
-    );
-    const educationItemIds = [
-      ...new Set(
-        educationKeys.map((key) => {
-          const parts = key.split("_");
-          return parts[0] + "_" + parts[1]; // "Education_xxx"
-        })
-      ),
-    ];
-    for (const itemId of educationItemIds) {
-      const institution = formData[`${itemId}_기관명`];
-      const startDate = formData[`${itemId}_시작일`];
-
-      // 기관명이 있으면 시작일은 필수
-      if (institution && !startDate) {
-        showToast("교육 항목의 시작일을 입력해주세요.", "error");
-        return;
-      }
+      setFieldError({ ...error });
+      return;
     }
 
     // 검증 통과 시 즉시 로딩 상태 활성화
     setIsSaving(true);
-
-    // formData에 title 추가하고 제출
-    const formDataToSubmit = new FormData();
-    formDataToSubmit.append("intent", "save-resume");
-    formDataToSubmit.append("title", resumeTitle.trim());
-
-    // dynamicItems의 순서 정보를 formData에 추가 (드래그 순서 보존)
-    Object.entries(dynamicItems).forEach(([category, items]) => {
-      formDataToSubmit.append(`_order_${category}`, JSON.stringify(items));
-    });
-
-    // 기존 formData의 모든 필드를 추가
-    Object.entries(formData).forEach(([key, value]) => {
-      formDataToSubmit.append(key, value);
-    });
 
     // 수정 모드인 경우 resumeId를 URL에 포함
     const url = isEditMode
       ? `/add-resume?resumeId=${loaderData?.resume?.id}`
       : "/add-resume";
 
-    fetcher.submit(formDataToSubmit, {
+    fetcher.submit(toResumeFormData(draft), {
       method: "POST",
       action: url,
     });
-    setShowTitleDialog(false);
   };
+
+  // Cmd/Ctrl + S 로 저장
+  const saveRef = React.useRef(handleSaveResume);
+  saveRef.current = handleSaveResume;
+  React.useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        saveRef.current();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // 파일 선택 핸들러 (미리보기만)
   const handleFileChange = async (field: string, file: File | null) => {
@@ -2117,16 +1604,16 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
       return;
     }
 
-    // 파일 타입 검증
-    if (!file.type.startsWith("image/")) {
-      alert("이미지 파일만 업로드 가능합니다.");
+    // 파일 타입 검증 (저장 시 지원하는 형식만 허용)
+    if (!/^image\/(jpeg|png|gif|webp)$/.test(file.type)) {
+      showToast("JPG, PNG, GIF, WEBP 이미지만 업로드 가능합니다.", "error");
       return;
     }
 
     // 파일 크기 검증 (2MB = 2 * 1024 * 1024 bytes)
     const maxSize = 2 * 1024 * 1024;
     if (file.size > maxSize) {
-      alert("파일 크기는 2MB 이하여야 합니다.");
+      showToast("파일 크기는 2MB 이하여야 합니다.", "error");
       return;
     }
 
@@ -2160,123 +1647,97 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
         setIsUploadingPhoto(false);
       };
       reader.onerror = () => {
-        alert("이미지 읽기에 실패했습니다.");
+        showToast("이미지 읽기에 실패했습니다.", "error");
         setIsUploadingPhoto(false);
       };
       reader.readAsDataURL(compressedFile);
     } catch (error) {
       console.error("Image compression error:", error);
-      alert("이미지 처리 중 오류가 발생했습니다.");
+      showToast("이미지 처리 중 오류가 발생했습니다.", "error");
       setIsUploadingPhoto(false);
     }
   };
 
-  const renderFormField = (
-    field: string,
-    category?: string,
-    index?: number
-  ) => {
-    if (!selectedFields[field]) return null;
-
-    // 동적 항목인지 확인 (Experience_xxx, Side Project_xxx 형식)
-    const isDynamicExperience = field.startsWith("Experience_");
-    const isDynamicSideProject = field.startsWith("Side Project_");
-    const isDynamicEducation = field.startsWith("Education_");
-    const isDynamicCertification = field.startsWith("자격증_");
-    const isDynamicLanguageTest = field.startsWith("어학성적_");
-    const isDynamicEtc = field.startsWith("그 외 활동_");
-
-    // 상위 카테고리 체크 여부 확인 - 상위가 체크 해제되면 하위 항목도 숨김
-    if (isDynamicExperience && !selectedFields["Experience"]) return null;
-    if (isDynamicSideProject && !selectedFields["Side Project"]) return null;
-    if (isDynamicEducation && !selectedFields["Education"]) return null;
-    if (isDynamicCertification && !selectedFields["자격증"]) return null;
-    if (isDynamicLanguageTest && !selectedFields["어학성적"]) return null;
-    if (isDynamicEtc && !selectedFields["그 외 활동"]) return null;
-
-    // Experience 경력 필드인지 확인 (구버전 호환)
-    const isExperienceField = field.startsWith("경력");
-    // Side Project 필드인지 확인 (구버전 호환)
-    const isSideProjectField = field.startsWith("사이드프로젝트");
-
-    if (isDynamicExperience || isExperienceField) {
-      // Experience는 renderFormField를 거치지 않고 직접 ExperienceCard를 사용
-      // 이 부분은 실제로 호출되지 않아야 함 (직접 렌더링으로 대체됨)
-      return null;
-    }
-
-    if (isDynamicSideProject || isSideProjectField) {
-      // Side Project는 renderFormField를 거치지 않고 직접 SideProjectCard를 사용
-      return null;
-    }
-
-    if (isDynamicEducation) {
-      // Education는 renderFormField를 거치지 않고 직접 EducationCard를 사용
-      return null;
-    }
-
-    if (isDynamicEtc) {
-      // etc는 renderFormField를 거치지 않고 직접 EtcCard를 사용
-      return null;
-    }
-
-    if (isDynamicLanguageTest) {
-      // 어학성적는 renderFormField를 거치지 않고 직접 LanguageTestCard를 사용
-      return null;
-    }
-
-    if (isDynamicCertification) {
-      // 자격증는 renderFormField를 거치지 않고 직접 CertificationCard를 사용
-      return null;
-    }
+  const renderFormField = (field: string) => {
+    const config = aboutMeConfig[field];
+    const isInvalid = fieldError?.field === field;
+    const fieldClass = cn(inputClass, isInvalid && invalidClass);
 
     return (
-      <div key={field} className="mb-6">
-        <label
-          htmlFor={field}
-          className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-        >
-          {field}
-        </label>
+      <div key={field} className={config.half ? "" : "sm:col-span-2"}>
+        {field !== "사진" && (
+          <label htmlFor={field} className={labelClass}>
+            {config.label}
+            {field === "이름" && <span className="ml-1 text-red-400">*</span>}
+          </label>
+        )}
         {field === "사진" ? (
-          <div className="space-y-4">
-            <div className="flex items-center gap-4">
-              <input
-                id={field}
-                name={field}
-                type="file"
-                accept="image/*"
-                onChange={(e) =>
-                  handleFileChange(field, e.target.files?.[0] || null)
-                }
-                disabled={isUploadingPhoto}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          <div className="flex items-center gap-4">
+            {formData[field] ? (
+              <img
+                src={formData[field]}
+                alt="프로필 사진 미리보기"
+                className="h-20 w-20 shrink-0 rounded-full border-2 border-gray-600 object-cover"
               />
-              {isUploadingPhoto && (
-                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>처리 중...</span>
-                </div>
-              )}
-            </div>
-            {formData[field] && (
-              <div className="mt-4">
-                <img
-                  src={formData[field]}
-                  alt="프로필 사진 미리보기"
-                  className="w-32 h-32 rounded-full object-cover border-2 border-gray-300 dark:border-gray-600"
-                />
+            ) : (
+              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-gray-600 text-gray-500">
+                <User className="h-8 w-8" />
               </div>
             )}
+            <div className="min-w-0 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className={outlineButtonClass}
+                >
+                  <label htmlFor={field}>
+                    {isUploadingPhoto ? (
+                      <Loader2 className="animate-spin" />
+                    ) : (
+                      <ImagePlus />
+                    )}
+                    {formData[field] ? "사진 변경" : "사진 선택"}
+                  </label>
+                </Button>
+                {formData[field] && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleFileChange(field, null)}
+                    className="cursor-pointer text-gray-300 hover:bg-gray-700 hover:text-white"
+                  >
+                    삭제
+                  </Button>
+                )}
+              </div>
+              <p className="text-xs text-gray-400">
+                JPG, PNG, GIF, WEBP · 2MB 이하
+              </p>
+              <input
+                id={field}
+                type="file"
+                accept="image/jpeg,image/png,image/gif,image/webp"
+                onChange={(e) => {
+                  handleFileChange(field, e.target.files?.[0] || null);
+                  e.target.value = "";
+                }}
+                disabled={isUploadingPhoto}
+                className="sr-only"
+              />
+            </div>
           </div>
         ) : field === "영어 구사 능력" ? (
           <select
             id={field}
-            name={field}
             value={formData[field] || ""}
             onChange={(e) => handleInputChange(field, e.target.value)}
-            className="flex h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            style={{ minWidth: "200px" }}
+            className={cn(
+              "flex h-10 w-full min-w-0 rounded-md border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
+              fieldClass
+            )}
           >
             <option value="">수준을 선택하세요</option>
             <option value="Native">Native - 모국어와 동일 수준</option>
@@ -2287,30 +1748,299 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
         ) : field === "Introduce" ? (
           <textarea
             id={field}
-            name={field}
             rows={6}
             value={formData[field] || ""}
             onChange={(e) => handleInputChange(field, e.target.value)}
-            className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            placeholder={`${field}을(를) 입력하세요`}
+            className={cn(textareaClass, fieldClass)}
+            placeholder={config.placeholder}
           />
         ) : (
           <Input
             id={field}
-            name={field}
-            type={
-              field === "이메일"
-                ? "email"
-                : field === "전화번호"
-                  ? "tel"
-                  : "text"
-            }
+            type={config.type || "text"}
             value={formData[field] || ""}
+            aria-invalid={isInvalid}
             onChange={(e) => handleInputChange(field, e.target.value)}
-            placeholder={`${field}을(를) 입력하세요`}
+            placeholder={config.placeholder}
+            className={fieldClass}
           />
         )}
       </div>
+    );
+  };
+
+  // 왼쪽 패널: 이력서에 표시할 항목 선택
+  const renderSectionPanel = () => (
+    <>
+      {isSectionPanelOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/50 md:hidden"
+          aria-hidden="true"
+          onClick={() => setIsSectionPanelOpen(false)}
+        />
+      )}
+      <aside
+        aria-label="이력서 항목 선택"
+        className={cn(
+          "w-72 max-w-[85vw] shrink-0 flex-col gap-4 overflow-y-auto border-r border-gray-700 bg-gray-900 p-4",
+          isSectionPanelOpen ? "fixed inset-y-0 left-0 z-40 flex" : "hidden",
+          "md:static md:z-auto md:flex"
+        )}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h2 className="font-semibold text-white">표시할 항목</h2>
+            <p className="mt-1 text-xs text-gray-400">
+              체크한 항목만 이력서에 표시되고 저장됩니다
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="항목 패널 닫기"
+            onClick={() => setIsSectionPanelOpen(false)}
+            className="h-8 w-8 shrink-0 cursor-pointer text-gray-400 hover:bg-gray-800 hover:text-white md:hidden"
+          >
+            <X />
+          </Button>
+        </div>
+
+        {Object.keys(resumeCategories).map((category) => {
+          const headingClass =
+            "flex items-center justify-between gap-2 rounded-md px-2 py-2 text-sm font-medium text-white";
+
+          if (category === "About Me") {
+            const checkedCount = aboutMeFields.filter(
+              (field) => selectedFields[field]
+            ).length;
+            return (
+              <Collapsible
+                key={category}
+                open={openCategories[category]}
+                onOpenChange={(open) =>
+                  setOpenCategories((prev) => ({ ...prev, [category]: open }))
+                }
+              >
+                <CollapsibleTrigger
+                  className={cn(
+                    headingClass,
+                    "w-full cursor-pointer hover:bg-gray-800"
+                  )}
+                >
+                  <span>{categoryLabels[category]}</span>
+                  <span className="flex items-center gap-2 text-xs font-normal text-gray-400">
+                    {checkedCount}/{aboutMeFields.length}
+                    <ChevronDown
+                      className={cn(
+                        "h-4 w-4 transition-transform duration-200",
+                        openCategories[category] && "rotate-180"
+                      )}
+                    />
+                  </span>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <ul className="mt-1 space-y-0.5">
+                    {aboutMeFields.map((field) => (
+                      <li
+                        key={field}
+                        className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-gray-800"
+                      >
+                        <Checkbox
+                          id={`section-${field}`}
+                          checked={selectedFields[field] || false}
+                          disabled={field === "이름"}
+                          onCheckedChange={() => handleCheckboxChange(field)}
+                          className={checkboxClass}
+                        />
+                        <label
+                          htmlFor={`section-${field}`}
+                          className="flex-1 cursor-pointer text-sm text-gray-200"
+                        >
+                          {aboutMeConfig[field].label}
+                          {field === "이름" && (
+                            <span className="ml-1 text-xs text-gray-400">
+                              (필수)
+                            </span>
+                          )}
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                </CollapsibleContent>
+              </Collapsible>
+            );
+          }
+
+          const isDynamicCategory = detailCategories.includes(category);
+          const config = itemConfigs[category];
+
+          return (
+            <div key={category}>
+              <div className={cn(headingClass, "hover:bg-gray-800")}>
+                <label
+                  htmlFor={`section-${category}`}
+                  className="flex-1 cursor-pointer"
+                >
+                  {categoryLabels[category]}
+                </label>
+                <Checkbox
+                  id={`section-${category}`}
+                  checked={selectedFields[category] || false}
+                  onCheckedChange={() => handleCheckboxChange(category)}
+                  className={checkboxClass}
+                />
+              </div>
+              {isDynamicCategory && selectedFields[category] && (
+                <ul className="mt-1 space-y-0.5">
+                  {dynamicItems[category].map((itemId, index) => (
+                    <li
+                      key={itemId}
+                      className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-gray-800"
+                    >
+                      <Checkbox
+                        checked={selectedFields[itemId] || false}
+                        onCheckedChange={() => handleCheckboxChange(itemId)}
+                        aria-label={`${config.label} ${index + 1} 표시`}
+                        className={checkboxClass}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleJumpToItem(itemId)}
+                        className="min-w-0 flex-1 cursor-pointer truncate text-left text-sm text-gray-200"
+                      >
+                        {formData[`${itemId}_${config.titleKey}`]?.trim() ||
+                          `${config.label} ${index + 1}`}
+                      </button>
+                    </li>
+                  ))}
+                  <li>
+                    <button
+                      type="button"
+                      onClick={() => handleAddDynamicItem(category)}
+                      className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-gray-400 hover:bg-gray-800 hover:text-white"
+                    >
+                      <Plus className="h-4 w-4" />
+                      {config.label} 추가
+                    </button>
+                  </li>
+                </ul>
+              )}
+            </div>
+          );
+        })}
+      </aside>
+    </>
+  );
+
+  const renderSkillStackSection = () => {
+    const selectedSkills = parseSkillSelection(
+      formData["skill_stack_selected"]
+    );
+    const availableSkills = new Set(selectedSkills);
+    getVisibleItems("Experience").forEach((itemId) =>
+      splitSkills(formData[`${itemId}_스킬`]).forEach((skill) =>
+        availableSkills.add(skill)
+      )
+    );
+    getVisibleItems("Side Project").forEach((itemId) =>
+      splitSkills(formData[`${itemId}_기술스택`]).forEach((skill) =>
+        availableSkills.add(skill)
+      )
+    );
+    const allSkills = Array.from(availableSkills).sort();
+
+    return (
+      <section key="Skill Stack" className="space-y-3">
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 className="text-lg font-semibold text-white">
+            {categoryLabels["Skill Stack"]}
+          </h2>
+          <span className="text-sm text-gray-400">
+            {selectedSkills.length}/6
+          </span>
+        </div>
+        <div className={cn(panelClass, "p-4 sm:p-6")}>
+          {allSkills.length === 0 ? (
+            <p className="text-sm text-gray-400">
+              경력이나 사이드 프로젝트에 기술을 추가하면 여기에서 선택할 수
+              있습니다.
+            </p>
+          ) : (
+            <>
+              <p className="mb-3 text-sm text-gray-400">
+                사용 기간을 그래프로 보여줄 기술을 최대 6개 선택하세요.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {allSkills.map((skill) => {
+                  const isSelected = selectedSkills.includes(skill);
+                  return (
+                    <button
+                      key={skill}
+                      type="button"
+                      aria-pressed={isSelected}
+                      disabled={!isSelected && selectedSkills.length >= 6}
+                      onClick={() => handleSkillToggle(skill)}
+                      className={cn(
+                        "cursor-pointer rounded-full border px-3 py-1 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+                        isSelected
+                          ? "border-white bg-white text-gray-900"
+                          : "border-gray-600 text-gray-200 hover:border-gray-400"
+                      )}
+                    >
+                      {skill}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      </section>
+    );
+  };
+
+  const renderItemSection = (category: string) => {
+    const filteredItems = getVisibleItems(category);
+    if (!selectedFields[category]) return null;
+
+    return (
+      <section key={category} className="space-y-3">
+        <h2 className="text-lg font-semibold text-white">
+          {categoryLabels[category]}
+        </h2>
+        <SortableContext
+          items={filteredItems.map((itemId) => `${category}_${itemId}`)}
+          strategy={verticalListSortingStrategy}
+        >
+          {filteredItems.map((itemId, index) => (
+            <ItemCard
+              key={itemId}
+              itemId={itemId}
+              index={index}
+              category={category}
+              formData={formData}
+              collapsed={collapsedItems[itemId] || false}
+              errorField={
+                fieldError?.field.startsWith(`${itemId}_`)
+                  ? fieldError.field
+                  : undefined
+              }
+              onInputChange={handleInputChange}
+              onToggleCollapse={handleToggleCollapse}
+              onRemove={handleRemoveDynamicItem}
+            />
+          ))}
+        </SortableContext>
+        <button
+          type="button"
+          onClick={() => handleAddDynamicItem(category)}
+          className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-gray-600 py-3 text-sm text-gray-300 transition-colors hover:border-gray-400 hover:text-white"
+        >
+          <Plus className="h-4 w-4" />
+          {itemConfigs[category].label} 추가
+        </button>
+      </section>
     );
   };
 
@@ -2624,8 +2354,7 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
               const skillMap = new Map<string, number>(); // skillName -> total months
 
               // Experience 스킬 수집
-              dynamicItems.Experience.forEach((itemId) => {
-                if (!selectedFields[itemId]) return;
+              getVisibleItems("Experience").forEach((itemId) => {
 
                 const skills = formData[`${itemId}_스킬`];
                 const startDate = formData[`${itemId}_시작일`];
@@ -2655,8 +2384,7 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
               });
 
               // Side Project 스킬 수집
-              dynamicItems["Side Project"].forEach((itemId) => {
-                if (!selectedFields[itemId]) return;
+              getVisibleItems("Side Project").forEach((itemId) => {
 
                 const skills = formData[`${itemId}_기술스택`];
                 const startDate = formData[`${itemId}_시작일`];
@@ -2731,9 +2459,7 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
 
         {/* Experience 섹션 */}
         {(() => {
-          const experienceFields = dynamicItems["Experience"].filter(
-            (field) => selectedFields[field]
-          );
+          const experienceFields = getVisibleItems("Experience");
 
           if (experienceFields.length === 0) return null;
 
@@ -2899,9 +2625,7 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
 
         {/* Side Project 섹션 */}
         {(() => {
-          const sideProjectFields = dynamicItems["Side Project"].filter(
-            (field) => selectedFields[field]
-          );
+          const sideProjectFields = getVisibleItems("Side Project");
 
           if (sideProjectFields.length === 0) return null;
 
@@ -3023,9 +2747,7 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
 
         {/* Education 섹션 */}
         {(() => {
-          const educationFields = dynamicItems["Education"].filter(
-            (field) => selectedFields[field]
-          );
+          const educationFields = getVisibleItems("Education");
 
           if (educationFields.length === 0) return null;
 
@@ -3121,9 +2843,7 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
 
         {/* 자격증 섹션 */}
         {(() => {
-          const certificationFields = dynamicItems["자격증"].filter(
-            (field) => selectedFields[field]
-          );
+          const certificationFields = getVisibleItems("자격증");
 
           if (certificationFields.length === 0) return null;
 
@@ -3174,9 +2894,7 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
 
         {/* 어학 성적 섹션 */}
         {(() => {
-          const languageTestFields = dynamicItems["어학성적"].filter(
-            (field) => selectedFields[field]
-          );
+          const languageTestFields = getVisibleItems("어학성적");
 
           if (languageTestFields.length === 0) return null;
 
@@ -3229,9 +2947,7 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
 
         {/* 그 외 활동 섹션 */}
         {(() => {
-          const etcFields = dynamicItems["그 외 활동"].filter(
-            (field) => selectedFields[field]
-          );
+          const etcFields = getVisibleItems("그 외 활동");
 
           if (etcFields.length === 0) return null;
 
@@ -3329,690 +3045,182 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
       collisionDetection={closestCenter}
       onDragEnd={handleDragEnd}
     >
-      <SidebarProvider defaultOpen={false} className="min-h-0">
-        <div
-          className={`flex h-page w-full overflow-hidden ${isSaving ? "pointer-events-none" : ""}`}
-        >
-          <Sidebar className="border-r border-sidebar-border bg-white">
-            <SidebarContent>
-              {Object.entries(resumeCategories).map(([category, items]) => {
-                const isDynamicCategory = [
-                  "Experience",
-                  "Side Project",
-                  "Education",
-                  "자격증",
-                  "어학성적",
-                  "그 외 활동",
-                ].includes(category);
-                const isSkillGraphCategory = category === "Skill Stack";
-                const displayItems = isDynamicCategory
-                  ? dynamicItems[category]
-                  : items;
-
-                return (
-                  <SidebarGroup key={category}>
-                    {isSkillGraphCategory ? (
-                      // Skill Stack (체크박스만)
-                      <div className="px-2">
-                        <div className="flex items-center justify-between px-2 py-2">
-                          <label
-                            htmlFor={`category-${category}`}
-                            className="flex-1 cursor-pointer text-xs font-medium"
-                            style={{
-                              color: "hsl(var(--sidebar-foreground) / 0.7)",
-                            }}
-                          >
-                            {category}
-                          </label>
-                          <Checkbox
-                            id={`category-${category}`}
-                            checked={selectedFields[category] || false}
-                            onCheckedChange={() =>
-                              handleCheckboxChange(category)
-                            }
-                          />
-                        </div>
-                      </div>
-                    ) : isDynamicCategory ? (
-                      // 동적 카테고리 (체크박스만)
-                      <div className="px-2">
-                        <div className="flex items-center justify-between px-2 py-2">
-                          <label
-                            htmlFor={`category-${category}`}
-                            className="flex-1 cursor-pointer text-xs font-medium"
-                            style={{
-                              color: "hsl(var(--sidebar-foreground) / 0.7)",
-                            }}
-                          >
-                            {category}
-                          </label>
-                          <Checkbox
-                            id={`category-${category}`}
-                            checked={selectedFields[category] || false}
-                            onCheckedChange={() =>
-                              handleCheckboxChange(category)
-                            }
-                          />
-                        </div>
-                        {selectedFields[category] && (
-                          <SidebarGroupContent>
-                            <SidebarMenu>
-                              {displayItems.map((itemId, index) => (
-                                <SidebarMenuItem key={itemId}>
-                                  <SidebarMenuButton
-                                    className="w-full justify-start"
-                                    asChild
-                                  >
-                                    <div className="flex items-center gap-2 pl-6 pr-2 py-1.5">
-                                      <Checkbox
-                                        id={`${category}-${itemId}`}
-                                        checked={
-                                          selectedFields[itemId] || false
-                                        }
-                                        onCheckedChange={() =>
-                                          handleCheckboxChange(itemId)
-                                        }
-                                      />
-                                      <label
-                                        htmlFor={`${category}-${itemId}`}
-                                        className="flex-1 cursor-pointer text-sm"
-                                      >
-                                        {category === "Experience"
-                                          ? `경력 ${index + 1}`
-                                          : category === "Side Project"
-                                            ? `프로젝트 ${index + 1}`
-                                            : category === "Education"
-                                              ? `교육 ${index + 1}`
-                                              : category === "자격증"
-                                                ? `자격증 ${index + 1}`
-                                                : category === "어학성적"
-                                                  ? `어학 성적 ${index + 1}`
-                                                  : category === "그 외 활동"
-                                                    ? `활동 ${index + 1}`
-                                                    : `항목 ${index + 1}`}
-                                      </label>
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-6 w-6"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleRemoveDynamicItem(
-                                            category,
-                                            itemId
-                                          );
-                                        }}
-                                      >
-                                        <X className="h-4 w-4" />
-                                      </Button>
-                                    </div>
-                                  </SidebarMenuButton>
-                                </SidebarMenuItem>
-                              ))}
-                              <SidebarMenuItem>
-                                <SidebarMenuButton
-                                  className="w-full justify-start"
-                                  asChild
-                                >
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      handleAddDynamicItem(category)
-                                    }
-                                    className="flex items-center gap-2 pl-6 pr-2 py-1.5 text-sm text-muted-foreground hover:text-foreground"
-                                  >
-                                    <Plus className="h-4 w-4" />
-                                    <span>추가</span>
-                                  </button>
-                                </SidebarMenuButton>
-                              </SidebarMenuItem>
-                            </SidebarMenu>
-                          </SidebarGroupContent>
-                        )}
-                      </div>
-                    ) : (
-                      // About Me 등 일반 카테고리 (Collapsible)
-                      <Collapsible
-                        open={openCategories[category]}
-                        onOpenChange={(open) =>
-                          setOpenCategories((prev) => ({
-                            ...prev,
-                            [category]: open,
-                          }))
-                        }
-                      >
-                        <div className="px-2">
-                          <CollapsibleTrigger
-                            className="group flex w-full items-center justify-between px-2 py-2 rounded-md text-xs font-medium transition-colors hover:bg-accent cursor-pointer"
-                            style={{
-                              color: "hsl(var(--sidebar-foreground) / 0.7)",
-                            }}
-                          >
-                            <span>{category}</span>
-                            <ChevronDown
-                              className={`h-4 w-4 transition-transform duration-200 ${
-                                openCategories[category] ? "rotate-180" : ""
-                              }`}
-                            />
-                          </CollapsibleTrigger>
-                        </div>
-                        <CollapsibleContent>
-                          <SidebarGroupContent>
-                            <SidebarMenu>
-                              {items.map((item) => (
-                                <SidebarMenuItem key={item}>
-                                  <SidebarMenuButton
-                                    className="w-full justify-start"
-                                    asChild
-                                  >
-                                    <div className="flex items-center gap-2 pl-6 pr-2 py-1.5">
-                                      <Checkbox
-                                        id={`${category}-${item}`}
-                                        checked={selectedFields[item] || false}
-                                        onCheckedChange={() =>
-                                          handleCheckboxChange(item)
-                                        }
-                                      />
-                                      <label
-                                        htmlFor={`${category}-${item}`}
-                                        className="flex-1 cursor-pointer text-sm"
-                                      >
-                                        {item}
-                                      </label>
-                                    </div>
-                                  </SidebarMenuButton>
-                                </SidebarMenuItem>
-                              ))}
-                            </SidebarMenu>
-                          </SidebarGroupContent>
-                        </CollapsibleContent>
-                      </Collapsible>
-                    )}
-                  </SidebarGroup>
+      <div
+        className={cn(
+          "flex h-page w-full flex-col overflow-hidden bg-gray-900 [color-scheme:dark]",
+          isSaving && "pointer-events-none"
+        )}
+      >
+        {/* Header */}
+        <header className="border-b border-gray-700 bg-gray-900">
+          <div className="flex flex-wrap items-center gap-2 px-4 py-3 sm:gap-3">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                navigate(
+                  isEditMode
+                    ? `/resume/${loaderData?.resume?.id}`
+                    : "/my-resume"
+                )
+              }
+              className="group cursor-pointer text-white transition-all duration-200 ease-in-out hover:bg-gray-800/50 hover:text-white/90"
+            >
+              <ArrowLeft className="transition-transform duration-200 group-hover:-translate-x-1" />
+              <span className="hidden sm:inline">
+                {isEditMode ? "돌아가기" : "목록으로"}
+              </span>
+            </Button>
+            <h1 className="sr-only">
+              {isEditMode ? "이력서 수정" : "새 이력서 작성"}
+            </h1>
+            <Input
+              id="title"
+              value={resumeTitle}
+              aria-label="이력서 제목"
+              aria-invalid={fieldError?.field === "title"}
+              onChange={(e) => {
+                setResumeTitle(e.target.value);
+                setFieldError((prev) =>
+                  prev?.field === "title" ? null : prev
                 );
-              })}
-            </SidebarContent>
-          </Sidebar>
-
-          <SidebarInset className="min-h-0 flex-1 border-l border-sidebar-border bg-white flex flex-col overflow-hidden">
-            <div className="flex h-16 shrink-0 items-center justify-between gap-2 border-b px-4">
-              <div className="flex items-center gap-2">
-                <SidebarTrigger />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => {
-                    if (isPreviewMode) {
-                      setIsPreviewMode(false);
-                    } else {
-                      navigate("/my-resume");
-                    }
-                  }}
-                  className="group text-gray-700 hover:text-gray-900 hover:bg-gray-100 transition-all duration-200 ease-in-out cursor-pointer"
-                >
-                  <ArrowLeft className="h-4 w-4 transition-transform duration-200 group-hover:-translate-x-1" />
-                </Button>
-                <h1 className="text-xl font-semibold">
-                  {isPreviewMode ? "이력서 미리보기" : "이력서 작성"}
-                </h1>
-              </div>
+              }}
+              placeholder="이력서 제목 (예: 프론트엔드 개발자 이력서)"
+              className={cn(
+                inputClass,
+                "order-last h-9 w-full font-medium focus-visible:ring-offset-gray-900 sm:order-none sm:w-auto sm:min-w-0 sm:flex-1",
+                fieldError?.field === "title" && invalidClass
+              )}
+            />
+            <div className="ml-auto flex items-center gap-2">
+              {isDirty && (
+                <span className="hidden text-xs text-gray-400 lg:inline">
+                  저장되지 않은 변경 사항
+                </span>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsSectionPanelOpen(true)}
+                className={cn(outlineButtonClass, "md:hidden")}
+              >
+                <ListChecks />
+                항목
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                aria-pressed={isPreviewMode}
+                onClick={() => setIsPreviewMode((prev) => !prev)}
+                className={outlineButtonClass}
+              >
+                {isPreviewMode ? <Pencil /> : <Eye />}
+                {isPreviewMode ? "편집" : "미리보기"}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                title="저장 (Cmd/Ctrl + S)"
+                onClick={handleSaveResume}
+                disabled={isSubmitting}
+                className={primaryButtonClass}
+              >
+                {isSubmitting && <Loader2 className="animate-spin" />}
+                {isSubmitting ? "저장 중..." : "저장하기"}
+              </Button>
             </div>
+          </div>
+          {fieldError && (
+            <p
+              role="alert"
+              className="border-t border-red-900 bg-red-950/50 px-4 py-2 text-sm text-red-300"
+            >
+              {fieldError.message}
+            </p>
+          )}
+        </header>
 
-            <div className="flex-1 overflow-auto p-6 bg-white">
-              {isPreviewMode ? (
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-12 min-h-full">
+        <div className="flex min-h-0 flex-1">
+          {!isPreviewMode && renderSectionPanel()}
+
+          <main className="min-w-0 flex-1 overflow-y-auto">
+            {isPreviewMode ? (
+              <div className="px-4 py-8">
+                <div className="mx-auto max-w-3xl rounded-lg bg-white p-4 shadow-sm sm:p-8 md:p-12 dark:bg-gray-800">
                   {renderPreview()}
                 </div>
-              ) : (
-                <div className="mx-auto max-w-3xl">
-                  <Card className="mb-6">
-                    <CardHeader>
-                      <CardTitle>이력서 정보 입력</CardTitle>
-                      <CardDescription>
-                        왼쪽 사이드바에서 표시할 항목을 선택하고 정보를
-                        입력하세요
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <fetcher.Form className="space-y-6" method="POST">
-                        <input
-                          type="hidden"
-                          name="intent"
-                          value="save-resume"
-                        />
-                        {/* About Me 필드들 */}
-                        {resumeCategories["About Me"]
-                          .filter((field) => selectedFields[field])
-                          .map((field) => renderFormField(field))}
+              </div>
+            ) : (
+              <form
+                onSubmit={(e) => e.preventDefault()}
+                className="mx-auto max-w-3xl space-y-8 px-4 py-6 sm:py-8"
+              >
+                <section className="space-y-3">
+                  <h2 className="text-lg font-semibold text-white">
+                    {categoryLabels["About Me"]}
+                  </h2>
+                  <div
+                    className={cn(
+                      panelClass,
+                      "grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 sm:p-6"
+                    )}
+                  >
+                    {aboutMeFields
+                      .filter((field) => selectedFields[field])
+                      .map((field) => renderFormField(field))}
+                  </div>
+                </section>
 
-                        {/* 동적 카테고리 필드들 */}
-                        {Object.entries(dynamicItems).map(
-                          ([category, items]) => {
-                            const filteredItems = items.filter(
-                              (itemId) => selectedFields[itemId]
-                            );
-                            if (filteredItems.length === 0) return null;
-
-                            const itemIds = filteredItems.map(
-                              (itemId) => `${category}_${itemId}`
-                            );
-
-                            // 각 카테고리별 독립 컴포넌트 사용
-                            if (category === "Experience") {
-                              return (
-                                <SortableContext
-                                  key={category}
-                                  items={itemIds}
-                                  strategy={verticalListSortingStrategy}
-                                >
-                                  {filteredItems.map((itemId, index) => (
-                                    <ExperienceCard
-                                      key={itemId}
-                                      itemId={itemId}
-                                      index={index}
-                                      category={category}
-                                      formData={formData}
-                                      onInputChange={handleInputChange}
-                                      onRemove={() =>
-                                        handleRemoveDynamicItem(
-                                          category,
-                                          itemId
-                                        )
-                                      }
-                                    />
-                                  ))}
-                                </SortableContext>
-                              );
-                            }
-
-                            if (category === "Side Project") {
-                              return (
-                                <SortableContext
-                                  key={category}
-                                  items={itemIds}
-                                  strategy={verticalListSortingStrategy}
-                                >
-                                  {filteredItems.map((itemId, index) => (
-                                    <SideProjectCard
-                                      key={itemId}
-                                      itemId={itemId}
-                                      index={index}
-                                      category={category}
-                                      formData={formData}
-                                      onInputChange={handleInputChange}
-                                      onRemove={() =>
-                                        handleRemoveDynamicItem(
-                                          category,
-                                          itemId
-                                        )
-                                      }
-                                    />
-                                  ))}
-                                </SortableContext>
-                              );
-                            }
-
-                            if (category === "Education") {
-                              return (
-                                <SortableContext
-                                  key={category}
-                                  items={itemIds}
-                                  strategy={verticalListSortingStrategy}
-                                >
-                                  {filteredItems.map((itemId, index) => (
-                                    <EducationCard
-                                      key={itemId}
-                                      itemId={itemId}
-                                      index={index}
-                                      category={category}
-                                      formData={formData}
-                                      onInputChange={handleInputChange}
-                                      onRemove={() =>
-                                        handleRemoveDynamicItem(
-                                          category,
-                                          itemId
-                                        )
-                                      }
-                                    />
-                                  ))}
-                                </SortableContext>
-                              );
-                            }
-
-                            if (category === "자격증") {
-                              return (
-                                <SortableContext
-                                  key={category}
-                                  items={itemIds}
-                                  strategy={verticalListSortingStrategy}
-                                >
-                                  {filteredItems.map((itemId, index) => (
-                                    <CertificationCard
-                                      key={itemId}
-                                      itemId={itemId}
-                                      index={index}
-                                      category={category}
-                                      formData={formData}
-                                      onInputChange={handleInputChange}
-                                      onRemove={() =>
-                                        handleRemoveDynamicItem(
-                                          category,
-                                          itemId
-                                        )
-                                      }
-                                    />
-                                  ))}
-                                </SortableContext>
-                              );
-                            }
-
-                            if (category === "어학성적") {
-                              return (
-                                <SortableContext
-                                  key={category}
-                                  items={itemIds}
-                                  strategy={verticalListSortingStrategy}
-                                >
-                                  {filteredItems.map((itemId, index) => (
-                                    <LanguageTestCard
-                                      key={itemId}
-                                      itemId={itemId}
-                                      index={index}
-                                      category={category}
-                                      formData={formData}
-                                      onInputChange={handleInputChange}
-                                      onRemove={() =>
-                                        handleRemoveDynamicItem(
-                                          category,
-                                          itemId
-                                        )
-                                      }
-                                    />
-                                  ))}
-                                </SortableContext>
-                              );
-                            }
-
-                            if (category === "그 외 활동") {
-                              return (
-                                <SortableContext
-                                  key={category}
-                                  items={itemIds}
-                                  strategy={verticalListSortingStrategy}
-                                >
-                                  {filteredItems.map((itemId, index) => (
-                                    <EtcCard
-                                      key={itemId}
-                                      itemId={itemId}
-                                      index={index}
-                                      category={category}
-                                      formData={formData}
-                                      onInputChange={handleInputChange}
-                                      onRemove={() =>
-                                        handleRemoveDynamicItem(
-                                          category,
-                                          itemId
-                                        )
-                                      }
-                                    />
-                                  ))}
-                                </SortableContext>
-                              );
-                            }
-
-                            // 기존 방식 유지 (혹시 모를 다른 카테고리)
-                            return (
-                              <SortableContext
-                                key={category}
-                                items={itemIds}
-                                strategy={verticalListSortingStrategy}
-                              >
-                                {filteredItems.map((itemId, index) =>
-                                  renderFormField(itemId, category, index)
-                                )}
-                              </SortableContext>
-                            );
-                          }
-                        )}
-
-                        {Object.values(resumeCategories)
-                          .flat()
-                          .filter((field) => selectedFields[field]).length ===
-                          0 && (
-                          <div className="py-12 text-center text-muted-foreground">
-                            <p className="text-lg mb-2">항목을 선택해주세요</p>
-                            <p className="text-sm">
-                              왼쪽 사이드바에서 표시할 항목을 체크박스로
-                              선택하세요
-                            </p>
-                          </div>
-                        )}
-
-                        {Object.values(resumeCategories)
-                          .flat()
-                          .filter((field) => selectedFields[field]).length >
-                          0 && (
-                          <div className="flex gap-4 pt-4">
-                            <Button
-                              type="button"
-                              className="flex-1 cursor-pointer border"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                setShowTitleDialog(true);
-                              }}
-                              disabled={fetcher.state === "submitting"}
-                            >
-                              {fetcher.state === "submitting" ? (
-                                <>
-                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                  저장 중...
-                                </>
-                              ) : (
-                                "저장하기"
-                              )}
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              className="flex-1 cursor-pointer"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                setIsPreviewMode(true);
-                              }}
-                            >
-                              미리보기
-                            </Button>
-                          </div>
-                        )}
-                      </fetcher.Form>
-                    </CardContent>
-                  </Card>
-                </div>
-              )}
-            </div>
-          </SidebarInset>
+                {Object.keys(resumeCategories).map((category) => {
+                  if (category === "About Me") return null;
+                  if (category === "Skill Stack") {
+                    return selectedFields[category]
+                      ? renderSkillStackSection()
+                      : null;
+                  }
+                  return renderItemSection(category);
+                })}
+              </form>
+            )}
+          </main>
         </div>
-      </SidebarProvider>
+      </div>
 
-      {/* Skill Stack 선택 다이얼로그 */}
-      <Dialog open={showSkillStackDialog} onOpenChange={setShowSkillStackDialog}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogClose onClose={() => setShowSkillStackDialog(false)} />
+      {/* 저장하지 않고 나가기 확인 다이얼로그 */}
+      <Dialog
+        open={blocker.state === "blocked"}
+        onOpenChange={() => blocker.reset?.()}
+      >
+        <DialogContent className="mx-4 border border-gray-700 bg-gray-800">
           <DialogHeader>
-            <DialogTitle>Skill Stack 선택</DialogTitle>
-            <DialogDescription>
-              경력과 사이드프로젝트에서 사용한 기술 중 표시할 기술을 선택하세요. (최대 6개)
+            <DialogTitle className="text-xl text-white">
+              저장하지 않고 나갈까요?
+            </DialogTitle>
+            <DialogDescription className="text-gray-400">
+              지금 나가면 작성 중인 변경 사항이 사라집니다.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 mt-4">
-            {(() => {
-              // 모든 기술 수집
-              const allSkillsSet = new Set<string>();
-
-              // Experience 스킬 수집
-              dynamicItems.Experience.forEach((itemId) => {
-                if (!selectedFields[itemId]) return;
-                const skills = formData[`${itemId}_스킬`];
-                if (skills) {
-                  skills
-                    .split(",")
-                    .map((s) => s.trim())
-                    .filter((s) => s.length > 0)
-                    .forEach((skill) => allSkillsSet.add(skill));
-                }
-              });
-
-              // Side Project 스킬 수집
-              dynamicItems["Side Project"].forEach((itemId) => {
-                if (!selectedFields[itemId]) return;
-                const skills = formData[`${itemId}_기술스택`];
-                if (skills) {
-                  skills
-                    .split(",")
-                    .map((s) => s.trim())
-                    .filter((s) => s.length > 0)
-                    .forEach((skill) => allSkillsSet.add(skill));
-                }
-              });
-
-              const allSkills = Array.from(allSkillsSet).sort();
-              const selectedSkillsStr = formData["skill_stack_selected"];
-              const selectedSkills: string[] = selectedSkillsStr
-                ? JSON.parse(selectedSkillsStr)
-                : [];
-
-              if (allSkills.length === 0) {
-                return (
-                  <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
-                    경력이나 사이드프로젝트에 기술을 추가하면 여기에 표시됩니다.
-                  </p>
-                );
-              }
-
-              return (
-                <div className="space-y-2">
-                  {allSkills.map((skill) => {
-                    const isSelected = selectedSkills.includes(skill);
-                    const isMaxReached = selectedSkills.length >= 6 && !isSelected;
-
-                    return (
-                      <div
-                        key={skill}
-                        className="flex items-center space-x-2 p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
-                      >
-                        <Checkbox
-                          id={`skill-${skill}`}
-                          checked={isSelected}
-                          disabled={isMaxReached}
-                          onCheckedChange={(checked) => {
-                            const newSelected = checked
-                              ? [...selectedSkills, skill]
-                              : selectedSkills.filter((s) => s !== skill);
-                            
-                            // 최대 6개 제한
-                            const limitedSelected = newSelected.slice(0, 6);
-                            
-                            setFormData((prev) => ({
-                              ...prev,
-                              skill_stack_selected: JSON.stringify(limitedSelected),
-                            }));
-
-                            // Skill Stack 체크박스도 활성화
-                            if (limitedSelected.length > 0) {
-                              setSelectedFields((prev) => ({
-                                ...prev,
-                                "Skill Stack": true,
-                              }));
-                            }
-                          }}
-                        />
-                        <label
-                          htmlFor={`skill-${skill}`}
-                          className={`flex-1 cursor-pointer text-sm ${
-                            isMaxReached
-                              ? "text-gray-400 dark:text-gray-500"
-                              : "text-gray-900 dark:text-gray-100"
-                          }`}
-                        >
-                          {skill}
-                        </label>
-                        {isMaxReached && (
-                          <span className="text-xs text-gray-400">
-                            (최대 6개)
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })()}
-          </div>
-          <div className="flex gap-3 justify-end mt-6">
+          <div className="flex justify-end gap-3">
             <Button
               variant="outline"
-              onClick={() => setShowSkillStackDialog(false)}
-              className="cursor-pointer"
+              onClick={() => blocker.reset?.()}
+              className={outlineButtonClass}
             >
-              완료
+              계속 작성
+            </Button>
+            <Button
+              onClick={() => blocker.proceed?.()}
+              className="cursor-pointer bg-red-600 text-white hover:bg-red-700"
+            >
+              나가기
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* 제목 입력 다이얼로그 */}
-      <Dialog open={showTitleDialog} onOpenChange={setShowTitleDialog}>
-        <DialogContent>
-          <DialogClose onClose={() => setShowTitleDialog(false)} />
-          <DialogHeader>
-            <DialogTitle>이력서 제목 입력</DialogTitle>
-            <DialogDescription>
-              이력서를 구분할 수 있는 제목을 입력해주세요.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 mt-4">
-            <Input
-              type="text"
-              value={resumeTitle}
-              onChange={(e) => setResumeTitle(e.target.value)}
-              placeholder="예: 프론트엔드 개발자 이력서"
-              className="w-full cursor-pointer"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && resumeTitle.trim()) {
-                  handleSaveResume();
-                }
-              }}
-            />
-            <div className="flex gap-3 justify-end">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowTitleDialog(false);
-                  setResumeTitle(initialData.resumeTitle);
-                }}
-                className="cursor-pointer"
-              >
-                취소
-              </Button>
-              <Button
-                onClick={handleSaveResume}
-                disabled={!resumeTitle.trim() || fetcher.state === "submitting"}
-                className="cursor-pointer border"
-              >
-                {fetcher.state === "submitting" ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    저장 중...
-                  </>
-                ) : (
-                  "저장하기"
-                )}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
       {toast && (
         <Toast message={toast.message} type={toast.type} onClose={hideToast} />
       )}
@@ -4020,13 +3228,11 @@ export default function AddResume({ loaderData }: Route.ComponentProps) {
       {/* 저장 중 전체 화면 로딩 오버레이 */}
       {isSaving && (
         <div className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm flex items-center justify-center pointer-events-auto">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-8 flex flex-col items-center gap-4 min-w-[300px]">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          <div className="bg-gray-800 rounded-lg shadow-xl p-8 flex flex-col items-center gap-4 min-w-[300px]">
+            <Loader2 className="h-8 w-8 animate-spin text-white" />
             <div className="text-center">
-              <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                처리 중...
-              </p>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+              <p className="text-lg font-semibold text-white">처리 중...</p>
+              <p className="text-sm text-gray-400 mt-2">
                 이력서를 저장하고 있습니다.
                 <br />
                 잠시만 기다려주세요.

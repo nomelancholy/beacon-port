@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../database.types";
-import { parseResumeForm } from "../app/features/resume/save-resume";
+import { parseResumeForm, toResumeFormData, validateResumeDraft } from "../app/features/resume/save-resume";
 import { saveResume } from "../app/features/resume/save-resume.server";
 
 function form() {
@@ -51,6 +51,46 @@ test("invalid required fields, date ranges and metadata are rejected", () => {
     const input = form();
     for (const [key, value] of Object.entries(values)) input.set(key, value);
     assert.equal(parseResumeForm(input).success, false, JSON.stringify(values));
+  }
+});
+
+function draft() {
+  return {
+    title: "개발자 이력서",
+    formData: {
+      이름: "홍길동", 주소: "서울", skill_stack_selected: '["react"]',
+      Experience_a_회사명: "shown", Experience_b_회사명: "unchecked", Education_c_기관명: "hidden",
+    } as Record<string, string>,
+    selectedFields: { 이름: true, Experience: true, Experience_a: true, Education_c: true } as Record<string, boolean>,
+    dynamicItems: { Experience: ["Experience_a", "Experience_b", "Experience_empty"], Education: ["Education_c"] },
+  };
+}
+
+test("only checked fields and items are submitted, and the result parses", () => {
+  const form = toResumeFormData(draft());
+  assert.equal(form.has("주소"), false);
+  assert.equal(form.has("skill_stack_selected"), false);
+  const parsed = parseResumeForm(form);
+  assert.equal(parsed.success, true);
+  if (!parsed.success) return;
+  assert.deepEqual(parsed.data.experiences.map(row => row.company), ["shown"]);
+  assert.deepEqual(parsed.data.educations, []);
+});
+
+test("draft validation points at the first field to fix", () => {
+  assert.equal(validateResumeDraft(draft()), null);
+  const cases: Array<[(input: ReturnType<typeof draft>) => void, string]> = [
+    [input => { input.title = " "; }, "title"],
+    [input => { delete input.formData.이름; }, "이름"],
+    [input => { input.selectedFields.이메일 = true; input.formData.이메일 = "bad"; }, "이메일"],
+    [input => { input.formData.Experience_a_회사명 = " "; }, "Experience_a_회사명"],
+    [input => { input.formData.Experience_a_시작일 = "2026-06"; input.formData.Experience_a_종료일 = "2026-01"; }, "Experience_a_종료일"],
+    [input => { input.selectedFields.Education = true; }, "Education_c_시작일"],
+  ];
+  for (const [change, field] of cases) {
+    const input = draft();
+    change(input);
+    assert.equal(validateResumeDraft(input)?.field, field);
   }
 });
 

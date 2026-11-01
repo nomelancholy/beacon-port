@@ -32,6 +32,83 @@ const resumeSchema = z.object({
 
 export type ResumePayload = z.infer<typeof resumeSchema>;
 
+export const aboutMeFields = [
+  "사진", "이름", "Role", "이메일", "전화번호", "주소", "영어 구사 능력", "블로그",
+  "LinkedIn", "Instagram", "Facebook", "Github", "Youtube", "X", "Introduce",
+];
+
+const itemRules: Record<string, { label: string; required: string; requiredLabel: string; startRequired?: boolean; ranged?: boolean }> = {
+  Experience: { label: "경력", required: "회사명", requiredLabel: "회사명", ranged: true },
+  "Side Project": { label: "프로젝트", required: "프로젝트명", requiredLabel: "프로젝트명", startRequired: true, ranged: true },
+  Education: { label: "교육", required: "기관명", requiredLabel: "교육 기관명", startRequired: true, ranged: true },
+  자격증: { label: "자격증", required: "자격증명", requiredLabel: "자격증명" },
+  어학성적: { label: "어학 성적", required: "시험명", requiredLabel: "시험명" },
+  "그 외 활동": { label: "활동", required: "활동명", requiredLabel: "활동명" },
+};
+
+export const detailCategories = Object.keys(itemRules);
+
+export type ResumeDraft = {
+  title: string;
+  formData: Record<string, string>;
+  selectedFields: Record<string, boolean>;
+  dynamicItems: Record<string, string[]>;
+};
+
+// An item counts only while both it and its category are checked.
+export function visibleResumeItems(
+  draft: Pick<ResumeDraft, "selectedFields" | "dynamicItems">, category: string,
+) {
+  if (!draft.selectedFields[category]) return [];
+  return (draft.dynamicItems[category] ?? []).filter(id => draft.selectedFields[id]);
+}
+
+export function validateResumeDraft(draft: ResumeDraft): { field: string; message: string } | null {
+  const value = (key: string) => draft.formData[key]?.trim() ?? "";
+  if (!draft.title.trim()) return { field: "title", message: "이력서 제목을 입력해주세요." };
+  if (!value("이름")) return { field: "이름", message: "이름을 입력해주세요." };
+  if (draft.selectedFields["이메일"] && value("이메일") && !z.email().safeParse(value("이메일")).success) {
+    return { field: "이메일", message: "이메일 형식을 확인해주세요." };
+  }
+  for (const category of detailCategories) {
+    const rule = itemRules[category];
+    for (const [index, id] of visibleResumeItems(draft, category).entries()) {
+      const name = `${rule.label} ${index + 1}`;
+      const start = value(`${id}_시작일`);
+      const end = value(`${id}_종료일`);
+      if (!value(`${id}_${rule.required}`)) {
+        return { field: `${id}_${rule.required}`, message: `${name}의 ${rule.requiredLabel}을 입력해주세요.` };
+      }
+      if (rule.startRequired && !start) return { field: `${id}_시작일`, message: `${name}의 시작일을 입력해주세요.` };
+      if (rule.ranged && start && end && start > end) {
+        return { field: `${id}_종료일`, message: `${name}의 종료일이 시작일보다 빠릅니다.` };
+      }
+    }
+  }
+  return null;
+}
+
+// Unchecked fields stay in the editor but must not reach the saved resume.
+export function toResumeFormData(draft: ResumeDraft) {
+  const form = new FormData();
+  form.set("intent", "save-resume");
+  form.set("title", draft.title.trim());
+  for (const field of aboutMeFields) {
+    if (draft.selectedFields[field] && draft.formData[field]) form.set(field, draft.formData[field]);
+  }
+  if (draft.selectedFields["Skill Stack"] && draft.formData.skill_stack_selected) {
+    form.set("skill_stack_selected", draft.formData.skill_stack_selected);
+  }
+  for (const category of detailCategories) {
+    const items = visibleResumeItems(draft, category);
+    form.set(`_order_${category}`, JSON.stringify(items));
+    for (const [key, value] of Object.entries(draft.formData)) {
+      if (items.some(id => key.startsWith(`${id}_`))) form.set(key, value);
+    }
+  }
+  return form;
+}
+
 export function parseResumeForm(form: FormData):
   | { success: true; data: ResumePayload }
   | { success: false; error: string } {
